@@ -45,6 +45,12 @@ def test_names_choose_the_profile():
     assert duo.pmax(0.0) > 1.8 * one.pmax(0.0)
 
 
+def test_device_entries_old_and_new():
+    from types import SimpleNamespace as NS
+    assert quatt.device_entry_ids(NS(config_entry_id="a", config_entries={"a"})) == ["a"]     # HA 2026: one entry
+    assert quatt.device_entry_ids(NS(config_entries={"b"})) == ["b"]                        # older HA
+
+
 def test_cic_state():
     assert quatt.pump_state("2", 1.2) == "heating"
     assert quatt.pump_state("2", 0.05) == "standby"                      # the CIC says heating, the units have not started

@@ -16,10 +16,10 @@
     "lovelace",
     "websocket_api"
   ],
-  "documentation": "https://github.com/marcovannoord/ha-roost",
+  "documentation": "https://github.com/marcovannoord/ha-roost-quatt",
   "integration_type": "service",
   "iot_class": "calculated",
-  "issue_tracker": "https://github.com/marcovannoord/ha-roost/issues",
+  "issue_tracker": "https://github.com/marcovannoord/ha-roost-quatt/issues",
   "requirements": [],
   "version": "0.1.0"
 }

@@ -60,6 +60,12 @@ BOILER_KW = 0.3                              # heat from a gas boiler above this
 BAD_LOW, BAD_HIGH = 0.5, 95.0
 
 
+def device_entry_ids(dev) -> list[str]:
+    """The config entries a device belongs to: one since Home Assistant 2026 (config_entry_id), a set before."""
+    one = getattr(dev, "config_entry_id", None)
+    return [one] if one else list(getattr(dev, "config_entries", ()))
+
+
 def key_of(unique_id: str | None) -> str | None:
     """The Quatt key at the end of a unique_id ("<hub>:<device>:<key>")."""
     if not unique_id or ":" not in unique_id:

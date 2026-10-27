@@ -24,7 +24,7 @@ class QuattMixin:
             return
         reg = er.async_get(self.hass)
         found: list[tuple[str | None, str]] = []
-        for entry_id in dev.config_entries:
+        for entry_id in quatt.device_entry_ids(dev):
             found += [(e.unique_id, e.entity_id) for e in er.async_entries_for_config_entry(reg, entry_id)
                       if e.platform == "quatt" and not e.disabled_by]
         self.ent = quatt.resolve(found)

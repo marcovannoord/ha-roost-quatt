@@ -221,7 +221,7 @@ def _check_quatt(hass: HomeAssistant, device_id: str) -> bool:
     if dev is None:
         return False
     reg = er.async_get(hass)
-    found = [(e.unique_id, e.entity_id) for entry_id in dev.config_entries
+    found = [(e.unique_id, e.entity_id) for entry_id in quatt.device_entry_ids(dev)
              for e in er.async_entries_for_config_entry(reg, entry_id) if e.platform == "quatt"]
     return quatt.is_quatt(quatt.resolve(found))
 

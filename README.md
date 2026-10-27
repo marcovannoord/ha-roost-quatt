@@ -8,7 +8,7 @@ Plans your thermostat 24 hours ahead on price, weather and the heat your house s
 > heat pumps. All of the planning, learning, self-checks and the dashboard card are Roost's. This fork swaps the
 > Weheat parts for the Quatt ones. Not affiliated with Quatt or Weheat.
 
-<p align="center"><a href="https://my.home-assistant.io/redirect/hacs_repository/?owner=marcovannoord&repository=ha-roost&category=integration"><img src="https://my.home-assistant.io/badges/hacs_repository.svg" alt="Open in HACS" height="36"></a></p>
+<p align="center"><a href="https://my.home-assistant.io/redirect/hacs_repository/?owner=marcovannoord&repository=ha-roost-quatt&category=integration"><img src="https://my.home-assistant.io/badges/hacs_repository.svg" alt="Open in HACS" height="36"></a></p>
 >
 > **Status: beta.** It starts in **shadow mode**: it shows what it would do and why, without touching your
 > thermostat, until you let it steer.

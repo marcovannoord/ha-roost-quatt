@@ -8,7 +8,7 @@ from __future__ import annotations
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 
-from . import series
+from . import quatt, series
 
 PV_WORDS = ("pv", "solar", "zon")
 EXPORT_WORDS = ("feedin", "feed_in", "export", "teruglever", "terug")
@@ -68,7 +68,7 @@ def room_sensor(hass: HomeAssistant, thermostat_id: str | None, heat_pump_device
         # every device of the Quatt integration entry: its thermostat device reads the room over OpenTherm (the
         # thermostat's own reading, not a separate sensor)
         dev_reg = dr.async_get(hass)
-        for entry_id in hp.config_entries:
+        for entry_id in quatt.device_entry_ids(hp):
             own |= {d.id for d in dr.async_entries_for_config_entry(dev_reg, entry_id)}
 
     def in_area(eid: str) -> bool:
