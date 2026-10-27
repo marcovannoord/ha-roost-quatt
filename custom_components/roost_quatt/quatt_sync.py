@@ -135,12 +135,14 @@ class QuattMixin:
             self.importing = False
         await self.async_save()
         if self.import_info.get("done"):
+            await self._async_rated_pmax()
             await self.async_learn()
         self._notify()
 
     async def _async_refresh_pump(self) -> None:
         """The hours since the last import, from the statistics (nightly, before learning)."""
         await self._async_pump_info()
+        await self._async_rated_pmax()
         if not self.import_info.get("done") or self.importing or not quatt.is_quatt(self.ent):
             return
         end = dt_util.utcnow().replace(minute=0, second=0, microsecond=0)
@@ -164,3 +166,32 @@ class QuattMixin:
                                                      curve.opentherm_from_hours(self._pump_hours))
         if adv is not None:
             self.curve_advice = adv
+
+    async def _async_rated_pmax(self, days: int = 365) -> None:
+        """The maximum output line from what Quatt rates the outdoor units at (ratedPower, remote API) against the outdoor
+        temperature, from the statistics: what the units can give, not the most the house ever asked of them. Learning
+        still raises it when whole hours give more. Kept as it was without the rated power (local API only)."""
+        if not self.ent.get("rated_hp1") or not self.ent.get("outdoor"):
+            return
+        ids = {r: self.ent[r] for r in ("rated_hp1", "rated_hp2", "outdoor") if self.ent.get(r)}
+        end = dt_util.utcnow().replace(minute=0, second=0, microsecond=0)
+        try:
+            raw = await get_instance(self.hass).async_add_executor_job(
+                statistics.statistics_during_period, self.hass, end - timedelta(days=days), end, set(ids.values()), "hour",
+                STAT_UNITS, {"mean"})
+        except Exception as err:  # noqa: BLE001 - keep the line there is
+            _LOGGER.debug("Roost: rated power not read: %s", err)
+            return
+        by = {r: {(s["start"].timestamp() if isinstance(s["start"], datetime) else float(s["start"])): _f(s.get("mean"))
+                  for s in raw.get(eid, [])} for r, eid in ids.items()}
+        n = quatt.units(self.ent, self._num(self.ent.get("units")))
+        samples = [(t_out, quatt.rated_total(by["rated_hp1"].get(t), by.get("rated_hp2", {}).get(t), n))
+                   for t, t_out in by["outdoor"].items() if t_out is not None]
+        line = await self.hass.async_add_executor_job(quatt.pmax_line, samples)
+        if line is None:
+            return
+        old = (self.pump.pmax_a, self.pump.pmax_b, self.pump.pmax_lo, self.pump.pmax_hi)
+        self.pump.pmax_a, self.pump.pmax_b, self.pump.pmax_lo, self.pump.pmax_hi = line
+        self.quatt_info["pmax_rated"] = list(line)
+        if tuple(line) != old:
+            self.event("pmax_rated", line=list(line), was=list(old), units=n)

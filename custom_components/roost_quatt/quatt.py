@@ -35,6 +35,8 @@ QUATT: dict[str, tuple[str, ...]] = {
     "flow_rate": ("qc.flowRateFiltered",),
     "boiler_power": ("boiler.computedBoilerHeatPower", "boilerPower"),
     "units": ("numberOfHeatPumps",),                         # remote API (optional)
+    "rated_hp1": ("heatPumps.0.ratedPower",),                # remote API: what the unit can give now (W)
+    "rated_hp2": ("heatPumps.1.ratedPower",),
 }
 REQUIRED = ("state", "power_out", "power_in")                # without these Roost cannot follow the heat pump
 
@@ -54,7 +56,7 @@ FAULT_CODES = {99, 400}
 TEXT_STATES = {"standby": 0, "standby - heating": 1, "heating - heatpump only": 2, "heating - heatpump + boiler": 3,
                "heating - boiler only": 4, "chill circulation": 5, "chill cooling": 6}
 
-IMPORT_VERSION = 2                           # 2: electricity without the standby; older imports are read again
+IMPORT_VERSION = 3                           # 2: electricity without the standby; 3: the maximum output from the rated power
 LIVE_KEEP_DAYS = 14                          # the hours Roost counted itself, kept in its store until the history file has them
 RUN_KW = 0.15                                # an outdoor unit taking more than this is running (standby is ~10-20 W)
 OT_DEMAND_MIN = 15.0                         # a control setpoint above this: the thermostat asks for heat
@@ -243,3 +245,50 @@ class LiveHour:
             elif state == "boiler":
                 self.boiler_s += dt
         return closed
+
+
+RATED_BIN = 2.0              # °C per outdoor bin for the maximum-output line
+RATED_MIN_BINS = 4           # bins with enough hours needed to draw it
+RATED_MIN_HOURS = 5
+RATED_FIT_MAX = 10.0         # °C: the line is fitted where the house heats; milder the rating flattens off (the cap)
+RATED_FLOOR_T = -20.0        # °C: below the coldest hours seen the line may go on down to here
+
+
+def rated_total(hp1: float | None, hp2: float | None, n_units: int) -> float | None:
+    """What all outdoor units can give together (kW): both rated, else the first one's times the number of units (they
+    are the same unit, and a sensor of the second may be disabled)."""
+    if hp1 is None or hp1 <= 0:
+        return None
+    if hp2 is not None and hp2 > 0 and n_units >= 2:
+        return hp1 + hp2
+    return hp1 * max(1, n_units)
+
+
+def pmax_line(samples: list[tuple[float, float]]) -> tuple[float, float, float, float] | None:
+    """(outdoor °C, kW the units can give) per hour -> the maximum-output line (a, b, lo, hi): pmax = a + b · T_out,
+    clamped to [lo, hi]. Fitted to the median of each outdoor bin (so a few odd hours do not tilt it), over the heating
+    range; hi is the rating in mild weather, lo lets the line go on down below the coldest hours seen. None when the
+    hours cover too few temperatures."""
+    bins: dict[int, list[float]] = {}
+    for t, kw in samples:
+        if kw is not None and kw > 0 and -30.0 < t < 40.0:
+            bins.setdefault(int(t // RATED_BIN), []).append(kw)
+    pts = []
+    for b, v in bins.items():
+        if len(v) >= RATED_MIN_HOURS:
+            v.sort()
+            pts.append(((b + 0.5) * RATED_BIN, v[len(v) // 2]))
+    if len(pts) < RATED_MIN_BINS:
+        return None
+    ys = [y for _, y in pts]
+    cold = [p for p in pts if p[0] <= RATED_FIT_MAX]
+    if len(cold) >= RATED_MIN_BINS:
+        pts = cold                                           # steep in the cold, flat in mild weather: fit the cold part
+    n = len(pts)
+    mx, my = sum(x for x, _ in pts) / n, sum(y for _, y in pts) / n
+    sxx = sum((x - mx) ** 2 for x, _ in pts)
+    b = sum((x - mx) * (y - my) for x, y in pts) / sxx if sxx > 0 else 0.0
+    b = max(0.0, b)                                          # never less at a milder temperature
+    a = my - b * mx
+    lo = max(0.5 * min(ys), a + b * RATED_FLOOR_T)          # colder than seen: on down the line, within reason
+    return round(a, 2), round(b, 3), round(min(lo, min(ys)), 2), round(max(ys), 2)

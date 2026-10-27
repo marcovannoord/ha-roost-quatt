@@ -170,3 +170,21 @@ def test_every_role_the_code_reads_is_a_quatt_role():
         text = open(path, encoding="utf-8").read()
         used |= set(re.findall(r"\bent\.get\(\"([a-z0-9_]+)\"\)", text)) | set(re.findall(r"\bent\[\"([a-z0-9_]+)\"\]", text))
     assert used and used <= set(quatt.QUATT), sorted(used - set(quatt.QUATT))
+
+
+def test_rated_power_of_both_units():
+    assert quatt.rated_total(4.5, 4.6, 2) == 9.1
+    assert quatt.rated_total(4.5, None, 2) == 9.0            # the second unit's sensor disabled: the same unit twice
+    assert quatt.rated_total(4.5, None, 1) == 4.5 and quatt.rated_total(None, 4.6, 2) is None
+
+
+def test_maximum_output_line_from_the_rated_power():
+    """A Duo rated per unit as measured (median per outdoor bin): 4.0 kW at -5, 4.5 at -1, 4.8 at +1, 5.2 at +3,
+    5.5 at +5, 5.6 at +9, 6.1 from +10 °C."""
+    per_unit = {-5: 3.98, -3: 4.26, -1: 4.54, 1: 4.83, 3: 5.16, 5: 5.47, 7: 5.45, 9: 5.65, 11: 6.09, 13: 6.12, 15: 6.12}
+    samples = [(t + 0.1 * i, 2 * kw + 0.01 * (i % 3)) for t, kw in per_unit.items() for i in range(8)]
+    a, b, lo, hi = quatt.pmax_line(samples)
+    m = heatpump.HeatPumpModel.for_profile("quatt_duo")
+    m.pmax_a, m.pmax_b, m.pmax_lo, m.pmax_hi = a, b, lo, hi
+    assert 8.7 <= m.pmax(-1.0) <= 9.4 and 7.6 <= m.pmax(-5.0) <= 8.4 and m.pmax(-10.0) < 7.5 and 12.0 <= m.pmax(20.0) <= 12.3
+    assert quatt.pmax_line(samples[:16]) is None              # two temperatures: too few to draw a line
