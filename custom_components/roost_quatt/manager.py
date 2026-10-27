@@ -72,6 +72,7 @@ class RoostManager(PricesMixin, QuattMixin, HourLogMixin, HealthMixin, CareMixin
         self._weather_at = 0.0
         self._pump_hours: dict[int, dict] = {}      # the unit's hours: from the statistics, and counted live
         self._live = quatt.LiveHour()
+        self.live_hours: dict[int, dict] = {}       # seconds per state Roost counted itself, the last days (quatt.LIVE_KEEP_DAYS)
         self._weather_hist: dict[int, tuple] = {}
         self._planning = False
         self._learning = False
@@ -185,6 +186,9 @@ class RoostManager(PricesMixin, QuattMixin, HourLogMixin, HealthMixin, CareMixin
             self.house = model.HouseModel(**self.house_start(), source="building register" if building.prior(self.building) else "default")
         self.ready, self.ready_missing = check.readiness(self.check, None, winter=self.check.get("winter")) if self.check else (False, [])
         self._pump_hours = {int(k): v for k, v in (hist.get("pump") or {}).items()}
+        # kept in the small store, saved all the time: the history file is only written by the import and at night
+        self.live_hours = {int(k): v for k, v in (data.get("live_hours") or {}).items()}
+        quatt.merge_hours(self._pump_hours, self.live_hours)
         self.boiler_hours = history.boiler_hours(self._pump_hours)
         self._weather_hist = {int(k): tuple(v) for k, v in (hist.get("weather") or {}).items()}
         self._unsubs.append(async_track_time_interval(self.hass, self._async_tick, timedelta(seconds=TICK_SECONDS)))
@@ -291,6 +295,7 @@ class RoostManager(PricesMixin, QuattMixin, HourLogMixin, HealthMixin, CareMixin
             "building": self.building,
             "curve": self.curve_advice.as_dict() if self.curve_advice else None, "quatt_info": self.quatt_info,
             "sp_hist": {str(k): v for k, v in self.sp_hist.items() if k > time.time() - SP_HIST_DAYS * 86400},
+            "live_hours": {str(k): v for k, v in self.live_hours.items() if k > time.time() - quatt.LIVE_KEEP_DAYS * 86400},
             "room_models": {k: v.as_dict() for k, v in self.room_models.items() if any(r.id == k for r in self.rooms)},
             "events": list(self.events)})
 

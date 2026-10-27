@@ -55,6 +55,7 @@ TEXT_STATES = {"standby": 0, "standby - heating": 1, "heating - heatpump only": 
                "heating - boiler only": 4, "chill circulation": 5, "chill cooling": 6}
 
 IMPORT_VERSION = 2                           # 2: electricity without the standby; older imports are read again
+LIVE_KEEP_DAYS = 14                          # the hours Roost counted itself, kept in its store until the history file has them
 RUN_KW = 0.15                                # an outdoor unit taking more than this is running (standby is ~10-20 W)
 OT_DEMAND_MIN = 15.0                         # a control setpoint above this: the thermostat asks for heat
 BOILER_KW = 0.3                              # heat from a gas boiler above this: it ran

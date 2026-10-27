@@ -45,6 +45,7 @@ class QuattMixin:
         if closed:
             ts, fields = closed
             self._pump_hours.setdefault(ts, {}).update(fields)
+            self.live_hours.setdefault(ts, {}).update(fields)
 
     # ------------------------------------------------------------ the unit
     async def _async_pump_info(self) -> None:

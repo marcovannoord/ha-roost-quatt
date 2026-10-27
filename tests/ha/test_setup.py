@@ -278,3 +278,21 @@ async def test_an_update_replays_the_days_kept(hass: HomeAssistant, entry) -> No
     await m._async_replay_kept_days()
     assert m.saving_days[day] != 9.99 and day in m.saving_detail and m.saving_detail[day]["parts"]
     assert m.replayed_with == planner.REPLAY_VERSION
+
+
+async def test_live_hours_are_kept_over_a_restart(hass: HomeAssistant, entry) -> None:
+    """The seconds Roost counts from the CIC per hour go into its store (saved every hour), and back into the heat
+    pump's hours after a restart: the history file itself is only written by the import and at night."""
+    m = entry.runtime_data
+    t0 = int(time.time() // 3600 - 3) * 3600
+    m._last_tick = None
+    for i in range(31):                                  # an hour seen in two-minute runs, the CIC in standby
+        m._track_live(t0 + i * 120)
+        m._last_tick = t0 + i * 120
+    m._track_live(t0 + 3600 + 60)
+    assert m.live_hours[t0] == {"heating_s_live": 0} and m._pump_hours[t0]["heating_s_live"] == 0
+    await m.async_save()
+    assert await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+    m2 = entry.runtime_data
+    assert m2 is not m and m2._pump_hours[t0]["heating_s_live"] == 0 and t0 in m2.live_hours

@@ -8,6 +8,7 @@ First version of the fork of Roost v0.7.7 for Quatt heat pumps.
 - The heat pump's history comes from Home Assistant's long-term statistics of those sensors (no login, nothing leaves Home Assistant); seconds of heating per hour are estimated from them and counted live from the CIC's state from then on.
 - Starting profiles for one Quatt outdoor unit and for a Quatt Duo.
 - Electricity per hour and per day from the power input (a Quatt has no energy meter), while heating only: the units' standby (~10 W) is measured and left out, as a heat pump's own meter for heating does.
+- The seconds of heating Roost counts itself are kept in its store, saved every hour, so a restart does not lose them before the nightly save.
 - A CIC that asks for a boiler which gives no heat (removed, or never there) does not make Roost treat it as a hybrid.
 - Domain `roost_quatt`, card `custom:roost-quatt-card`, services `roost_quatt.*`.
 
