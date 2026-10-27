@@ -81,6 +81,12 @@ set_settings:
           max: 24
           step: 1
           unit_of_measurement: "h"
+    weekly_comfort:
+      selector:
+        boolean:
+    comfort_schedule:
+      selector:
+        object:
 import_history:
   fields:
     days:

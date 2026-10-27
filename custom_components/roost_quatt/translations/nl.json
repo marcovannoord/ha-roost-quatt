@@ -127,12 +127,13 @@
           "day_from": "Comforturen beginnen om",
           "day_to": "Comforturen eindigen om",
           "comfort": "Comforttemperatuur (overdag)",
-          "day_min": "Overdag nooit kouder dan",
-          "night_min": "'s Nachts nooit kouder dan",
+          "day_min": "Minimum tijdens comfortblokken",
+          "night_min": "Minimum buiten comfortblokken",
           "store_max": "Hoogstens zo warm bij warmte opslaan"
         },
         "data_description": {
-          "store_max": "Roost slaat warmte op in de vloer (of het huis) als een uur goedkoop is (of zonnestroom weinig opbrengt) en er een duur uur volgt. Gelijk aan de comforttemperatuur zetten schakelt dat uit."
+          "store_max": "Roost slaat warmte op in de vloer (of het huis) als een uur goedkoop is (of zonnestroom weinig opbrengt) en er een duur uur volgt. Gelijk aan de comforttemperatuur zetten schakelt dat uit.",
+          "day_from": "Dagelijkse standaard (als het weekschema uitstaat)"
         },
         "sections": {
           "advanced": {
@@ -153,6 +154,20 @@
               "baseline_night": "De besparing wordt getoond tegenover een vaste thermostaat op de comforttemperatuur, het gebruikelijke advies bij warmtepompen.",
               "weather_source": "Open-Meteo heeft geen account nodig en geeft straling en wind (het huismodel gebruikt beide)."
             }
+          },
+          "weekly_schedule": {
+            "name": "Comforttijden per weekdag",
+            "description": "Bij inschakelen vervangen deze tijden de dagelijkse begin- en eindtijd hierboven. Gebruik kwartiertijden, bijvoorbeeld 07:00-09:00, 17:00-22:00. Een lege dag betekent alleen de minimumtemperatuur. Een blok zoals 22:00-02:00 loopt door op de volgende dag. Roost plant het voorverwarmen vóór het comfortblok.",
+            "data": {
+              "enabled": "Gebruik een weekschema",
+              "monday": "Maandag",
+              "tuesday": "Dinsdag",
+              "wednesday": "Woensdag",
+              "thursday": "Donderdag",
+              "friday": "Vrijdag",
+              "saturday": "Zaterdag",
+              "sunday": "Zondag"
+            }
           }
         }
       }
@@ -164,7 +179,8 @@
       "day_order": "De comforturen moeten eindigen na het begin.",
       "weather_needed": "Kies een weerentiteit (onder Geavanceerd).",
       "lowest_above_comfort": "De laagste thermostaatstand mag niet boven de comforttemperatuur liggen.",
-      "price_needed": "Kies een prijssensor, of kies een vaste prijs."
+      "price_needed": "Kies een prijssensor, of kies een vaste prijs.",
+      "invalid_schedule": "Controleer de weektijden: gebruik HH:MM-HH:MM, gescheiden door komma’s, in stappen van 15 minuten. Blokken mogen niet overlappen, ook niet na middernacht."
     },
     "abort": {
       "already_configured": "Deze warmtepomp is al ingesteld."
@@ -268,12 +284,13 @@
           "day_from": "Comforturen beginnen om",
           "day_to": "Comforturen eindigen om",
           "comfort": "Comforttemperatuur (overdag)",
-          "day_min": "Overdag nooit kouder dan",
-          "night_min": "'s Nachts nooit kouder dan",
+          "day_min": "Minimum tijdens comfortblokken",
+          "night_min": "Minimum buiten comfortblokken",
           "store_max": "Hoogstens zo warm bij warmte opslaan"
         },
         "data_description": {
-          "store_max": "Roost slaat warmte op in de vloer (of het huis) als een uur goedkoop is (of zonnestroom weinig opbrengt) en er een duur uur volgt. Gelijk aan de comforttemperatuur zetten schakelt dat uit."
+          "store_max": "Roost slaat warmte op in de vloer (of het huis) als een uur goedkoop is (of zonnestroom weinig opbrengt) en er een duur uur volgt. Gelijk aan de comforttemperatuur zetten schakelt dat uit.",
+          "day_from": "Dagelijkse standaard (als het weekschema uitstaat)"
         },
         "sections": {
           "advanced": {
@@ -293,6 +310,20 @@
               "max_above_room": "Zo blijft een OpenTherm-thermostaat om lauw water vragen (hoge COP).",
               "baseline_night": "De besparing wordt getoond tegenover een vaste thermostaat op de comforttemperatuur, het gebruikelijke advies bij warmtepompen.",
               "weather_source": "Open-Meteo heeft geen account nodig en geeft straling en wind (het huismodel gebruikt beide)."
+            }
+          },
+          "weekly_schedule": {
+            "name": "Comforttijden per weekdag",
+            "description": "Bij inschakelen vervangen deze tijden de dagelijkse begin- en eindtijd hierboven. Gebruik kwartiertijden, bijvoorbeeld 07:00-09:00, 17:00-22:00. Een lege dag betekent alleen de minimumtemperatuur. Een blok zoals 22:00-02:00 loopt door op de volgende dag. Roost plant het voorverwarmen vóór het comfortblok.",
+            "data": {
+              "enabled": "Gebruik een weekschema",
+              "monday": "Maandag",
+              "tuesday": "Dinsdag",
+              "wednesday": "Woensdag",
+              "thursday": "Donderdag",
+              "friday": "Vrijdag",
+              "saturday": "Zaterdag",
+              "sunday": "Zondag"
             }
           }
         }
@@ -363,7 +394,8 @@
       "day_order": "De comforturen moeten eindigen na het begin.",
       "weather_needed": "Kies een weerentiteit (onder Geavanceerd).",
       "lowest_above_comfort": "De laagste thermostaatstand mag niet boven de comforttemperatuur liggen.",
-      "price_needed": "Kies een prijssensor, of kies een vaste prijs."
+      "price_needed": "Kies een prijssensor, of kies een vaste prijs.",
+      "invalid_schedule": "Controleer de weektijden: gebruik HH:MM-HH:MM, gescheiden door komma’s, in stappen van 15 minuten. Blokken mogen niet overlappen, ook niet na middernacht."
     },
     "abort": {
       "mode_set": "De modus is ingesteld."
@@ -656,6 +688,22 @@
           }
         }
       }
+    },
+    "fallback": {
+      "title": "{name}: sturen zonder volledig plan",
+      "description": "Roost kan al een paar uur geen volledig plan maken (geen stroomprijs, kamertemperatuur of weersverwachting). Het stuurt intussen op een terugval: zonder prijs op één vlakke prijs, anders de comforttemperatuur in de comforturen en het nachtminimum daarbuiten. Controleer de prijs-, kamer- en weersensoren in de instellingen van Roost; de melding verdwijnt zodra er weer een volledig plan is."
+    },
+    "house_cold": {
+      "title": "{name}: het huis blijft onder het minimum",
+      "description": "Roost stuurt de thermostaat, maar de kamer is al een uur {room} °C, ruim onder het minimum van {minimum} °C. Mogelijk kan de warmtepomp het niet bijhouden, geeft de thermostaat het setpoint niet door of zit het huismodel ver ernaast. Controleer warmtepomp en thermostaat; Roost blijft intussen bijsturen."
+    },
+    "price_no_forecast_estimated": {
+      "title": "{name}: de prijssensor heeft geen verwachting",
+      "description": "{entity} geeft alleen de huidige prijs, en die verandert elk uur (een dynamisch contract). Roost schat de komende uren uit de day-ahead-prijzen, zoals deze sensor ze volgde. Een sensor met prijzen voor minstens de komende 24 uur in de attributen, of de ingebouwde day-ahead-prijzen met de formule van je contract, plant nauwkeuriger."
+    },
+    "price_no_forecast_flat": {
+      "title": "{name}: de prijssensor heeft geen verwachting",
+      "description": "{entity} geeft alleen de huidige prijs, en die verandert van uur tot uur. Roost kan daaruit de komende uren (nog) niet afleiden en plant op één vlakke prijs: het verschuift het stoken niet naar goedkopere uren. Kies een sensor met prijzen voor minstens de komende 24 uur in de attributen, of de ingebouwde day-ahead-prijzen met de formule van je contract."
     }
   },
   "services": {
@@ -717,6 +765,13 @@
         },
         "day_to": {
           "name": "Comforturen tot"
+        },
+        "weekly_comfort": {
+          "name": "Comforttijden per weekdag aan"
+        },
+        "comfort_schedule": {
+          "name": "Comforttijden per weekdag",
+          "description": "Per weekdag een lijst perioden, als \"07:00-09:00, 17:30-22:00\" of [[420, 540]] in minuten; kwartieren, een periode mag over middernacht lopen."
         }
       }
     },

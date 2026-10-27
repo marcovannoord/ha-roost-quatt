@@ -21,7 +21,7 @@ Plans your thermostat 24 hours ahead on price, weather and the heat your house s
 
 ## What it does
 
-- **Plans instead of reacting.** Every 15 minutes a 24-hour plan of thermostat settings. When an hour is cheap (or your
+- **Plans instead of reacting.** A 24-hour plan of thermostat settings that holds until something real changes. When an hour is cheap (or your
   solar earns little) and an expensive evening follows, it charges the floor a little; in the expensive hours the house
   lives off that heat. It weighs the price difference against the heat that leaks away and the better COP in the warm
   afternoon.
@@ -133,8 +133,8 @@ Per quarter of an hour the planner simulates the thermostat and the heat pump's 
 the floor first and reaching the room with the learned delay, losses to outside with wind, sun on the facade and
 internal gains. The cost of an hour is the electricity (heat ÷ COP) times the energy value of that hour, plus comfort
 penalties and a small cost per change; extra rooms add their own. A dynamic-programming search over 36 hours finds a
-plan, which is then refined with the heat pump's real delay. Only the first hour is carried out; the plan is made again
-every 15 minutes. More in [docs/DESIGN.md](docs/DESIGN.md).
+plan, which is then refined with the heat pump's real delay. The plan holds and is made afresh
+only for a reason (new prices, the room off the plan, a changed forecast, a change of yours). More in [docs/DESIGN.md](docs/DESIGN.md).
 
 ## Credits
 

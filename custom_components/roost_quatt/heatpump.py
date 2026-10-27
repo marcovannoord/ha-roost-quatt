@@ -12,7 +12,10 @@ The model also holds how the unit responds to the thermostat and when it makes h
 An OpenTherm thermostat modulates: the heat asked for is about the house's loss plus a gain per degree the thermostat's
 own reading is below the setpoint, and the unit follows that demand with a delay:
     demand = a · loss + k · (setpoint + offset − thermostat reading),  thermostat reading = room + th_diff
-    output moves towards the demand by `follow` of the gap per hour (1 = at once)
+    output moves towards the demand by `follow` of the gap per hour (1 = at once); when the thermostat asks for
+    nothing at all (demand ≤ 0) the unit stops at once (`stops`: seen on a Lyric T6 + Blackbird P80, and 5 % closer
+    to a year of its hourly heat than a slow fall; a slow fall made the planner count on heat that never came, so it
+    lowered the setpoint each time the unit ran and the unit ran in short bursts)
     q_min         lowest steady heat output; below it the unit cycles, at cyc × the COP
     dhw           share of each hour of the week (Monday 00:00 first, local time) spent on hot water: no space heating
 Without learned values (k None) it is a thermostat that closes a gap within the hour: k = C per hour, no delay.
@@ -86,6 +89,7 @@ class HeatPumpModel:
     k: float | None = None             # kW per °C below the setpoint; None: the house's C per hour (closes a gap in an hour)
     offset: float = 0.0                # the unit heats towards setpoint + offset (°C, in the thermostat's reading)
     follow: float = 1.0                # share of the gap between output and demand closed per hour
+    stops: bool = True                 # no demand at all: the output stops at once (False: it falls with `follow`)
     th_diff: float = 0.0               # thermostat reading minus the room sensor (°C)
     q_min: float = 0.0                 # lowest steady heat output (kW); 0 = unknown
     cyc: float = 1.0                   # COP factor while cycling below q_min

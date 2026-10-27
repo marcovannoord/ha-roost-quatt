@@ -37,6 +37,10 @@ class HealthMixin:
             "times": ", ".join(f"{s['minute'] // 60:02d}:{s['minute'] % 60:02d} → {s['to']:g} °C" for s in sched)})
         by_schedule = {t for s in sched for t in s["ts"]}
         own = [x for x in self.changes if x["ts"] not in by_schedule]
+        if c.get(schedule.ENABLED):
+            self.suggestion = None
+            self._issue("comfort", False)
+            return
         sug = comfort.suggest(own, local, time.time(), int(c[CONF_DAY_FROM]), int(c[CONF_DAY_TO]),
                               float(c[CONF_COMFORT]), float(c[CONF_DAY_MIN]))
         if self.suggestion is not None and (sug is None or sug.as_dict() != self.suggestion.as_dict()):
@@ -81,6 +85,20 @@ class HealthMixin:
             self.health.room_missing_since = None
         self._issue("room_missing", bool(self.health.room_missing_since and t - self.health.room_missing_since > ROOM_SILENT_MIN * 60))
         self._issue("quatt_missing", not quatt.is_quatt(self.ent))
+        # Roost steers and the room stays well below its minimum: tell the user (a unit that cannot keep up, a
+        # thermostat that does not pass the setpoint on, a model far off)
+        room = self.room()
+        loc = dt_util.as_local(datetime.fromtimestamp(t, tz=timezone.utc))
+        low = (self.settings().away_min if self.is_away(t) else
+               float(self.conf[CONF_DAY_MIN]) if self.is_day(loc) else float(self.conf[CONF_NIGHT_MIN]))
+        if self.mode == "active" and room is not None and room < low - HOUSE_COLD_K and not self.window.active():
+            self.health.house_cold_since = self.health.house_cold_since or t
+        else:
+            self.health.house_cold_since = None
+        cold = bool(self.health.house_cold_since and t - self.health.house_cold_since >= HOUSE_COLD_MIN * 60)
+        if cold and "house_cold" not in self.health.issues:
+            self._notify_user("house_cold", room=f"{room:.1f}", minimum=f"{low:g}")
+        self._issue("house_cold", cold, placeholders={"room": f"{room:.1f}" if room is not None else "?", "minimum": f"{low:g}"})
 
     @property
     def following(self) -> bool | None:
@@ -103,6 +121,11 @@ class HealthMixin:
         elif ev == "end":
             self.event("window", phase="end", room=self.room())
             self.window.prune(t - 400 * 86400)
+            if self._airing_from is not None:
+                self._airing_from = None
+                self.mem.last_write = None          # back to the plan at once, not after the change interval
+            # the room is not what the plan expected any more: plan afresh
+            self.hass.async_create_background_task(self._async_tick(None, force_plan="window"), "roost: plan after airing")
             self._notify()
 
     def ready_eta(self) -> tuple[str, datetime | None]:

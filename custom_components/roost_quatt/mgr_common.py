@@ -23,7 +23,7 @@ from homeassistant.helpers.event import async_track_state_change_event, async_tr
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
-from . import battery, building, check, comfort, control, epex, lookback, window, heatpump, history, model, planner, response, rooms, series, sun, value, weather as om
+from . import schedule, stick, battery, building, check, comfort, control, epex, lookback, window, heatpump, history, model, planner, response, rooms, series, sun, value, weather as om
 from .const import (
     CONF_BASELINE_NIGHT, CONF_BATTERY_KW, CONF_BATTERY_KWH, CONF_BATTERY_POWER, CONF_BATTERY_RESERVE, CONF_BATTERY_SOC, CONF_BATTERY_USE,
     CONF_COMFORT, CONF_DAY_FROM, CONF_DAY_MIN, CONF_DAY_TO, CONF_EXPORT_PRICE, CONF_GRID_POWER, CONF_GRID_PREFERENCE,
@@ -58,6 +58,11 @@ NO_LEVER_KW = 0.2             # learned gain below this (kW per °C): the setpoi
 HISTORY_KEEP_DAYS = 400       # the heat pump's hours and past weather kept: a year for learning, and a month to spare
 NOT_FOLLOWING_MIN = 45
 ROOM_SILENT_MIN = 30
+FALLBACK_MIN = 60           # no plan for this long (no price, room or weather): a fallback instead of the last setpoint
+FALLBACK_NOTICE_H = 3       # ... and a notice when it lasts this long
+MIN_RUN_MIN = 40            # the unit started heating less than this ago: Roost does not lower the setpoint yet
+HOUSE_COLD_K = 0.5          # the room this far below its minimum ...
+HOUSE_COLD_MIN = 60         # ... for this long while Roost steers: a notice
 
 
 def _i(v: Any) -> int | None:
@@ -77,4 +82,5 @@ def _f(v: Any) -> float | None:
 class Health:
     not_following_since: float | None = None
     room_missing_since: float | None = None
+    house_cold_since: float | None = None
     issues: set = field(default_factory=set)

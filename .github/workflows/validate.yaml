@@ -8,6 +8,12 @@ on:
     - cron: "0 3 * * 1"
 
 jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: node --check custom_components/roost_quatt/frontend/roost-quatt-card.js
+      - run: node --test tests/frontend_savings.test.mjs
   hassfest:
     runs-on: ubuntu-latest
     steps:

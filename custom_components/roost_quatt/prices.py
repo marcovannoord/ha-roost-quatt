@@ -12,8 +12,7 @@ class PricesMixin:
         return {e: {str(k): round(v, 5) for k, v in sorted(d.items())} for e, d in self.price_seen.items()}
 
     async def _async_seed_prices(self) -> None:
-        """Hourly prices of the last two days from the recorder (the state of the price sensor), so hours without a
-        forecast yet can be filled with the same hour a day earlier right after setup or a restart."""
+        """Retain known historical prices from the recorder; never use them as future tariffs."""
         now = dt_util.utcnow()
         start = now - timedelta(hours=49)
         for key in (CONF_IMPORT_PRICE, CONF_EXPORT_PRICE):
@@ -39,8 +38,8 @@ class PricesMixin:
                 if v is not None:
                     seen.setdefault(h0 + h * 3600, v * scale)
 
-    def _filled(self, key: str, raw: list[float | None], now: datetime, cur: float | None) -> list[float]:
-        """Hours past the forecast (tomorrow's prices come in the afternoon) from the same hour a day earlier."""
+    def _published(self, key: str, raw: list[float | None], now: datetime, cur: float | None) -> list[float]:
+        """Keep known history for diagnostics; stop planning at the first unpublished price."""
         seen = self.price_seen.setdefault(key, {})
         base = int(now.timestamp() // 3600 * 3600)
         for h, v in enumerate(raw):
@@ -48,9 +47,12 @@ class PricesMixin:
                 seen[base + h * 3600] = v
             elif v is not None:
                 seen.setdefault(base, v)
-        vals, guess = series.fill_gaps(raw, now.timestamp(), seen, cur)
-        self._price_guess[key] = guess
-        return [v or 0.0 for v in vals]
+        # A sensor's current price is usable now, but it does not publish a future tariff.
+        raw = list(raw)
+        if raw and raw[0] is None:
+            raw[0] = cur
+        self._price_guess[key] = [v is None for v in raw]
+        return series.published_prefix(raw)
 
     def _epex_series(self, now: datetime, hours: int, mult_key: str, add_key: str, key: str) -> list[float] | None:
         """The built-in day-ahead prices through the user's formula (day-ahead × multiplier + fixed amount)."""
@@ -59,7 +61,7 @@ class PricesMixin:
         mult, add = _f(self.conf.get(mult_key)) or 0.0, _f(self.conf.get(add_key)) or 0.0
         raw = [None if v is None else epex.formula(v, mult, add) for v in series.hourly(self._epex, now.timestamp(), hours, fill_last=False)]
         cur = series.current_value(self._epex, now.timestamp())
-        return self._filled(key, raw, now, epex.formula(cur, mult, add) if cur is not None else None)
+        return self._published(key, raw, now, epex.formula(cur, mult, add) if cur is not None else None)
 
     async def _async_epex(self, now: datetime) -> None:
         """Fetch the built-in day-ahead prices when due (Energy-Charts limits how often an address may ask)."""
@@ -92,9 +94,47 @@ class PricesMixin:
         if slots:
             fscale = series.slot_scale(slots, unit, cur * scale if cur is not None else None, now.timestamp())
             raw = [None if v is None else v * fscale for v in series.hourly(slots, now.timestamp(), hours, fill_last=False)]
-            return self._filled(eid, raw, now, cur * scale if cur is not None else None)
-        self._price_guess[eid] = [h > 0 for h in range(hours)]
-        return [cur * scale] * hours if cur is not None else None
+            return self._published(eid, raw, now, cur * scale if cur is not None else None)
+        if cur is None:
+            return None
+        return self._without_forecast(eid, cur * scale, now, hours)
+
+    def _without_forecast(self, eid: str, cur: float, now: datetime, hours: int) -> list[float]:
+        """A price sensor with only the current price. Its history tells what it is: one price or a fixed rate per hour
+        of the day (a fixed contract: those prices are known ahead), or a price that changes every hour (a dynamic
+        contract): then the hours ahead are estimated from the day-ahead prices, the way this sensor followed them
+        (sensor ≈ a × day-ahead + b), with a notice; one flat price when that does not fit."""
+        base = int(now.timestamp() // 3600 * 3600)
+        seen = self.price_seen.setdefault(eid, {})
+        seen[base] = cur
+        lh = self.local_hour
+        kind = series.classify_history(seen, lh)
+        out, how = [cur] * hours, kind
+        if kind == "tou":
+            rate = {lh(ts): v for ts, v in sorted(seen.items())}        # the latest price per hour of the day
+            out = [cur] + [rate.get(lh(base + i * 3600), cur) for i in range(1, hours)]
+        elif kind == "dynamic":
+            self._need_epex = True
+            how = "flat"
+            if self._epex:
+                pairs = []
+                for ts, v in sorted(seen.items())[-48:]:
+                    x = series.hourly(self._epex, ts, 1, fill_last=False)[0]
+                    if x is not None:
+                        pairs.append((x, v))
+                fit = series.fit_line(pairs)
+                if fit and fit[2] >= series.FIT_MIN_R2:
+                    a, b, _r2 = fit
+                    ahead = series.hourly(self._epex, base, hours, fill_last=False)
+                    out = series.published_prefix([cur] + [None if x is None else a * x + b for x in ahead[1:]])
+                    how = "estimated"
+        self._price_guess[eid] = [kind in ("dynamic", "unknown") and i > 0 for i in range(len(out))]
+        self.sources[f"price_forecast {eid}"] = how if kind == "dynamic" else kind
+        # one notice per sensor; its wording says whether Roost estimates the hours ahead or plans on one flat price
+        for k in ("estimated", "flat"):
+            self._issue(f"price_no_forecast_{k}_{eid}", kind in ("dynamic", "unknown") and (how == "estimated") == (k == "estimated"),
+                        translation_key=f"price_no_forecast_{k}", placeholders={"entity": eid})
+        return out
 
     def _pv_forecast(self, start: float, hours: int) -> list[float] | None:
         slots = []
@@ -129,24 +169,36 @@ class PricesMixin:
             imp = self._fixed_series(now, hours, CONF_FIXED_PRICE)
             exp = self._fixed_series(now, hours, CONF_FIXED_EXPORT_PRICE)
             self._price_guess[CONF_FIXED_PRICE] = [False] * hours
-            if imp is None:
+            if not imp:
                 self.sources["price"] = "missing"
                 return None
             self.sources["price"] = "fixed"
         elif c.get(CONF_PRICE_MODE) == "epex":
             imp = self._epex_series(now, hours, CONF_IMPORT_MULT, CONF_IMPORT_ADD, "epex_import")
-            if imp is None:
+            if not imp:
                 self.sources["price"] = "missing"
                 return None
             self.sources["price"] = "epex"
             exp = self._epex_series(now, hours, CONF_EXPORT_MULT, CONF_EXPORT_ADD, "epex_export") if c.get(CONF_EXPORT_FORMULA) else None
         else:
             imp = self._price_series(c.get(CONF_IMPORT_PRICE), now, hours)
-            if imp is None:
+            if not imp:
                 self.sources["price"] = "missing"
                 return None
             self.sources["price"] = "ok"
             exp = self._price_series(c.get(CONF_EXPORT_PRICE), now, hours) if c.get(CONF_EXPORT_PRICE) else None
+        # Clip BEFORE battery valuation: an unpublished refill/export price must not leak back into known hours.
+        export_required = (bool(c.get(CONF_EXPORT_FORMULA)) if c.get(CONF_PRICE_MODE) == "epex"
+                           else bool(c.get(CONF_EXPORT_PRICE)) if c.get(CONF_PRICE_MODE) != "fixed" else False)
+        if export_required and exp is None:
+            self.sources["price"] = "missing"
+            return None
+        hours = min(hours, len(imp), len(exp) if exp is not None else hours)
+        if not hours:
+            self.sources["price"] = "missing"
+            return None
+        imp = imp[:hours]
+        exp = exp[:hours] if exp is not None else None
         surplus = value.solar_export_now(self._kw(c.get(CONF_GRID_POWER)), self._kw(c.get(CONF_BATTERY_POWER)),
                                          self._kw(c.get(CONF_PV_POWER)), c.get(CONF_GRID_SIGN, "import_positive") == "import_positive")
         soc = self._num(c.get(CONF_BATTERY_SOC))

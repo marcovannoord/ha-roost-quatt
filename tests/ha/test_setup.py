@@ -276,7 +276,10 @@ async def test_an_update_replays_the_days_kept(hass: HomeAssistant, entry) -> No
                    "day": 7 <= h < 22, "e": 0.3, "q": 1.2} for h in range(24)]
     m.saving_days[day], m.replayed_with = 9.99, None                 # as an older version left it
     await m._async_replay_kept_days()
-    assert m.saving_days[day] != 9.99 and day in m.saving_detail and m.saving_detail[day]["parts"]
+    assert day not in m.saving_days and day in m.saving_detail and m.saving_detail[day]["parts"]
+    assert m.saving_detail[day]["saving"] is None
+    assert "missing_context" in m.saving_detail[day]["quality"]["reasons"]
+    assert m.saving_detail[day]["model_saving"] is not None
     assert m.replayed_with == planner.REPLAY_VERSION
 
 

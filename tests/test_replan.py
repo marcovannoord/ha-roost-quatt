@@ -40,6 +40,12 @@ def test_changed_prices_forecast_room_and_correction():
     assert line["detail"]["room_expected"] == 20.5 and line["detail"]["forecast_k"] == 2.0
 
 
+def test_newly_published_hours_extend_a_short_plan():
+    line = replan.compare(snap(n=8), snap(at=BASE + 1500, sp=21.0), 20.5)
+    assert line["why"] == ["prices_published"]
+    assert line["detail"]["prices_published"] == 16
+
+
 def test_a_new_hour_compares_the_same_hour():
     """An hour later the old plan's second hour is the new plan's first: its setpoint is what changed or not."""
     old = snap(sp=[20.5, 21.0] + [20.5] * 22)

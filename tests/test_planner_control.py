@@ -166,6 +166,13 @@ def test_guessed_prices_are_set_to_the_mean_of_the_known():
     assert planner.neutral_prices(flat, [False] + [True] * 23) is None
 
 
+def test_published_prefix_preserves_real_zero_and_negative_prices_and_stops_at_gaps():
+    assert series.published_prefix([.3, 0., -.1, None, .8]) == [.3, 0., -.1]
+    assert series.published_prefix([None, .3]) == []
+    assert series.published_prefix([.3, float("nan"), .2]) == [.3]
+    assert series.published_prefix([.3, float("inf")]) == [.3]
+
+
 def test_a_guessed_expensive_morning_does_not_move_tonight():
     """Tomorrow's prices are not published yet and are filled with today's: a plan built on them may store heat
     tonight for a guessed expensive morning; with the guesses at the mean of what is known it does not."""

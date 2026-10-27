@@ -156,7 +156,8 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     hass.services.async_register(DOMAIN, "set_settings", set_settings, vol.Schema({
         vol.Optional("comfort"): temp(15, 25), vol.Optional("day_min"): temp(10, 25), vol.Optional("night_min"): temp(5, 25),
         vol.Optional("store_max"): temp(15, 28), vol.Optional("lowest_setpoint"): temp(5, 25),
-        vol.Optional("day_from"): hour(0, 23), vol.Optional("day_to"): hour(1, 24)}))
+        vol.Optional("day_from"): hour(0, 23), vol.Optional("day_to"): hour(1, 24),
+        vol.Optional("weekly_comfort"): cv.boolean, vol.Optional("comfort_schedule"): dict}))
     hass.services.async_register(DOMAIN, "explain_saving", explain_saving, vol.Schema({vol.Optional("day", default="yesterday"): str}),
                                  supports_response=SupportsResponse.ONLY)
     hass.services.async_register(DOMAIN, "import_history", import_history,

@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from .mgr_common import *  # noqa: F401,F403 - the shared imports and constants
 from .mgr_common import _LOGGER, _f, _i, _iso_ts  # noqa: F401
-from . import curve, quatt, replan
+from . import curve, quatt, replan, savings
 from .care import CareMixin
 from .health import HealthMixin
 from .hourlog import HourLogMixin
@@ -33,13 +33,12 @@ class RoostManager(PricesMixin, QuattMixin, HourLogMixin, HealthMixin, CareMixin
         self.plan: planner.Plan | None = None
         self.plan_hours: list[planner.HourIn] = []
         self.plan_at: float | None = None
-        self.plan_tariff: list[float] = []          # import price per plan hour (what the price sensor says, or a guess)
-        self.plan_guess: list[bool] = []            # True: no price known yet for that hour, filled in
-        self.plan_on_guess = False                  # the plan in force set guessed prices to the mean (planner.neutral_prices)
+        self.plan_tariff: list[float] = []          # published import price per plan hour
+        self.plan_guess: list[bool] = []            # legacy diagnostic shape; new plans contain only known tariffs
+        self.plan_on_guess = False                  # legacy snapshot field; no guessed prices in new plans
         self.boiler_hours = 0                       # hours a gas boiler ran in the last year: a hybrid (history.boiler_hours)
         self.replayed_with: int | None = None       # planner.REPLAY_VERSION the days kept were replayed with
-        # price entity -> {hour epoch: price per kWh}: known hourly prices of the last days, to fill hours the price
-        # forecast does not reach yet with the same hour a day earlier
+        # price entity -> {hour epoch: price per kWh}: retained history, never a source of unpublished future tariffs
         self.price_seen: dict[str, dict[int, float]] = {}
         self._price_guess: dict[str, list[bool]] = {}
         self.reason = Reason("starting")
@@ -50,12 +49,23 @@ class RoostManager(PricesMixin, QuattMixin, HourLogMixin, HealthMixin, CareMixin
         self.hour_log: list[dict] = []              # last ~48 h: state and inputs per hour, for the daily saving
         self.saving_days: dict[str, float] = {}     # date -> saving (currency)
         self.saving_detail: dict[str, dict] = {}    # date -> the saving per hour (planner.breakdown), the last days
+        self.day_contexts: dict[str, dict] = {}      # immutable model/settings used to validate each local day
         self.plan_changes: list[dict] = []          # the plan changed: setpoint / expected saving before -> after, why
         self._plan_snap: dict | None = None         # the plan in force and what it saw (replan.snapshot)
         self.day_stats: dict[str, dict] = {}        # date -> the day in numbers (look back, day report)
         self.pred: dict[int, dict] = {}             # hour start -> room predicted for it 6 h and 1 h ahead
         self.plan_log: list[dict] = []              # per hour: everything the plan in force saw (replay a decision)
         self.plan_w_now: float | None = None        # the unit's output the last plan started from (kW)
+        self.commit: stick.Commitment | None = None   # the plan held: its setpoints and what it expected (stick.py)
+        self._watch = stick.Watch()
+        self.plan_why: str | None = None            # why the plan held was made afresh (stick.why_plan)
+        self.fallback: str | None = None            # "no_price": planned on one flat price; "schedule": comfort schedule
+        self._fail_since: float | None = None       # planning has failed since (no price, room or weather)
+        self._tariff_now: float | None = None       # the import price this hour, from the last tick (cost without a plan)
+        self.unpriced_kwh = 0.0                     # heating electricity today without any known price
+        self._heating_since: float | None = None    # the unit has been heating since (MIN_RUN_MIN)
+        self.runs: list[list] = []                  # [start, end or None]: the unit's space heating runs, the last days
+        self._airing_from: float | None = None      # the setpoint before Roost lowered it for an open window (contact)
         self.window = window.WindowWatch()          # airing: Roost waits and does not learn from those hours
         self.curve_advice = None                    # curve.CurveAdvice: the heating curve the house needs
         self.quatt_info: dict = {}                  # the unit as the Quatt entities show it (outdoor units, boiler)
@@ -94,6 +104,7 @@ class RoostManager(PricesMixin, QuattMixin, HourLogMixin, HealthMixin, CareMixin
         self._tasks: set[asyncio.Task] = set()
         self._epex: list[tuple[float, float, float]] = []   # built-in day-ahead prices (epex.py)
         self._epex_at: float | None = None
+        self._need_epex = False                     # a price sensor without a forecast: estimate from day-ahead prices
         self._stop_unsub: Callable[[], None] | None = None
         self._last_reason_code: str | None = None
         self.ready: bool = False
@@ -136,8 +147,7 @@ class RoostManager(PricesMixin, QuattMixin, HourLogMixin, HealthMixin, CareMixin
         return control.ControlSettings(min_interval_min=float(c[CONF_MIN_INTERVAL]), pause_hours=float(c[CONF_PAUSE_HOURS]))
 
     def is_day(self, local: datetime) -> bool:
-        c = self.conf
-        return int(c[CONF_DAY_FROM]) <= local.hour < int(c[CONF_DAY_TO])
+        return schedule.is_comfort(self.conf, local)
 
     # ------------------------------------------------------------ lifecycle
     async def async_start(self) -> None:
@@ -164,9 +174,14 @@ class RoostManager(PricesMixin, QuattMixin, HourLogMixin, HealthMixin, CareMixin
         self.pred = {int(k): v for k, v in (data.get("pred") or {}).items()}
         self.plan_log = data.get("plan_log") or []
         self.saving_detail = data.get("saving_detail") or {}
+        self.day_contexts = data.get("day_contexts") or {}
         self.replayed_with = data.get("replayed_with")
         self.plan_changes = data.get("plan_changes") or []
         self._plan_snap = data.get("plan_snap")
+        self.commit = stick.Commitment.from_dict(data.get("commit"))
+        self.runs = [r for r in (data.get("runs") or []) if isinstance(r, list) and len(r) == 2]
+        if self.runs and self.runs[-1][1] is None:
+            self._heating_since = self.runs[-1][0]  # a run that went on over the restart
         self.window.hours = set(int(h) for h in (data.get("window_hours") or []))
         self.pv_k = data.get("pv_k")
         self.load_profile = data.get("load_profile")
@@ -290,7 +305,9 @@ class RoostManager(PricesMixin, QuattMixin, HourLogMixin, HealthMixin, CareMixin
             "pred": {str(k): v for k, v in self.pred.items() if k > time.time() - 7200},
             "plan_log": self.plan_log[-PLAN_LOG_KEPT:], "replayed_with": self.replayed_with,
             "saving_detail": dict(sorted(self.saving_detail.items())[-SAVING_DETAIL_DAYS:]),
+            "day_contexts": dict(sorted(self.day_contexts.items())[-SAVING_DETAIL_DAYS - 1:]),
             "plan_changes": replan.prune(self.plan_changes, time.time()), "plan_snap": self._plan_snap,
+            "commit": self.commit.as_dict() if self.commit else None, "runs": self.runs,
             "pv_k": self.pv_k, "load_profile": self.load_profile, "battery": self.battery.as_dict(), "price_seen": self._price_seen_recent(),
             "today": {"day": self._cost_day, "cost": round(self.cost_today, 4), "kwh": round(self.kwh_today, 3)},
             "check": self.check, "changes": [c for c in self.changes if c["ts"] > time.time() - 30 * 86400],
@@ -391,7 +408,8 @@ class RoostManager(PricesMixin, QuattMixin, HourLogMixin, HealthMixin, CareMixin
             self._weather_at = time.time()
             self.sources["weather"] = "Open-Meteo"
         except Exception as err:  # noqa: BLE001
-            self.sources["weather"] = f"Open-Meteo unavailable: {err}"
+            # not str(err): an HTTP error holds the request URL, and with it the home location
+            self.sources["weather"] = f"Open-Meteo unavailable: {f'HTTP {err.status}' if hasattr(err, 'status') else type(err).__name__}"
 
     async def _async_weather_entity(self) -> None:
         eid = self.conf[CONF_WEATHER]
@@ -437,8 +455,13 @@ class RoostManager(PricesMixin, QuattMixin, HourLogMixin, HealthMixin, CareMixin
             lo, a, b = r.settings(int(c[CONF_DAY_FROM]), int(c[CONF_DAY_TO]))
             m = self.room_models.get(r.id) or rooms.RoomModel()
             if T is None:
+                # not read now: no minimum to plan for, but it stays in the status (and the saving is not whole-house)
+                meta.append({"id": r.id, "name": r.name, "kind": r.kind, "temperature": None, "minimum": lo, "from": a, "to": b,
+                             "active_now": False, "model": m.source, "model_error": m.error, "available": False, "expected": []})
                 continue
-            act = [rooms.active(h.hour, a, b) for h in hours]
+            inherits = r.hour_from is None and rooms.KINDS.get(r.kind, rooms.KINDS["other"])["from"] is None
+            # a room that keeps the house's comfort hours follows the weekly comfort periods too
+            act = [h.day if inherits else rooms.active(h.hour, a, b) for h in hours]
             plan_in.append({"model": m, "T": T, "min": lo, "active": act})
             meta.append({"id": r.id, "name": r.name, "kind": r.kind, "temperature": round(T, 1), "minimum": lo, "from": a, "to": b,
                          "active_now": act[0] if act else False, "model": m.source, "model_error": m.error})
@@ -486,14 +509,14 @@ class RoostManager(PricesMixin, QuattMixin, HourLogMixin, HealthMixin, CareMixin
 
 
     # ------------------------------------------------------------ the run
-    async def _async_tick(self, _now: datetime | None, force_plan: bool = False) -> None:
+    async def _async_tick(self, _now: datetime | None, force_plan: bool | str = False) -> None:
         now = dt_util.utcnow()
         t = now.timestamp()
         try:
             if not self.ent:
                 self._resolve_quatt()
             await self._async_weather()
-            if self.conf.get(CONF_PRICE_MODE) == "epex":
+            if self.conf.get(CONF_PRICE_MODE) == "epex" or self._need_epex:
                 await self._async_epex(now)
             self._watch_window(t)
             self._track_storage(t)
@@ -501,11 +524,20 @@ class RoostManager(PricesMixin, QuattMixin, HourLogMixin, HealthMixin, CareMixin
             self._track_live(t)
             self._watch_thermostat(t)
             self._count_cost(now)
-            self._log_hour(now)
             self._check_health(t)
-            due = force_plan or self.plan_at is None or t - self.plan_at >= PLAN_MINUTES * 60
+            heating = self.pump_state() == "heating"
+            self._track_runs(t, heating)
+            self._heating_since = (self._heating_since or t) if heating else None
+            e = self._energy(now, stick.HORIZON_H)
+            self._tariff_now = e[0].import_price[0] if e else None
+            why = self._why_plan(now, e, "forced" if force_plan is True else (force_plan or None))
+            # a plan made afresh only for a reason (stick.py); otherwise the plan held is worked out again for the new
+            # hour; without a plan, try again every PLAN_MINUTES
+            due = (why is not None or self.plan_at is None or int(t // 3600) != int(self.plan_at // 3600)
+                   or (self.plan is None and t - self.plan_at >= PLAN_MINUTES * 60))
             if due and not self._planning:
-                await self._async_plan(now)
+                await self._async_plan(now, why, e)
+            self._log_hour(now)
             await self._async_control(t)
         except Exception as err:  # noqa: BLE001 - one bad run must not stop the integration
             _LOGGER.exception("Roost run failed")
@@ -531,17 +563,50 @@ class RoostManager(PricesMixin, QuattMixin, HourLogMixin, HealthMixin, CareMixin
             if self._cost_day is not None:
                 self.spawn(self._async_close_day(self._cost_day), "close the day", background=False)
             self._cost_day, self.cost_today, self.kwh_today = day, 0.0, 0.0
+            self.unpriced_kwh = 0.0
         # the Quatt has no energy meter: its electricity is the power integrated over the time since the last run, while it
-        # heats (as a heat pump's own meter for heating counts it: not the standby in between)
+        # heats (as a heat pump's own meter for heating counts it: not the standby in between); a power reading that is
+        # briefly unavailable adds nothing
         t = now.timestamp()
         kw = self._kw(self.ent.get("power_in")) if self.pump_state() == "heating" else None
         if kw is not None and self._last_tick is not None and 0 < t - self._last_tick <= 600:
             d = max(0.0, kw) * (t - self._last_tick) / 3600
-            price = self.plan_hours[0].p_grid if self.plan_hours else 0.0
+            h = self.plan_hour(now)
+            # no plan: the published price of this hour; none known: counted as energy without a price, not as free
+            price = h.p_grid if h is not None else self._tariff_now
             self.kwh_today += d
-            self.cost_today += d * price
             self._elec_acc += d
-            self._cost_acc += d * price
+            if price is None:
+                self.unpriced_kwh += d
+            else:
+                self.cost_today += d * price
+                self._cost_acc += d * price
+
+    def _track_runs(self, t: float, heating: bool) -> None:
+        """The unit's space heating runs (start, end): how often it starts and how long it runs, for the card."""
+        if heating and (not self.runs or self.runs[-1][1] is not None):
+            self.runs.append([round(t), None])
+        elif not heating and self.runs and self.runs[-1][1] is None:
+            self.runs[-1][1] = round(t)
+        self.runs = [r for r in self.runs if (r[1] or t) > t - 3 * 86400]
+
+    def run_stats(self, t: float) -> dict:
+        """Per local day (today, yesterday): runs started and their mean length in minutes (a run going on counts to now)."""
+        today = dt_util.as_local(datetime.fromtimestamp(t, tz=timezone.utc)).date()
+        out = {}
+        for key, day in (("today", today), ("yesterday", today - timedelta(days=1))):
+            mine = [r for r in self.runs if dt_util.as_local(datetime.fromtimestamp(r[0], tz=timezone.utc)).date() == day]
+            mins = [((r[1] or t) - r[0]) / 60 for r in mine]
+            out[key] = {"starts": len(mine), "minutes": round(sum(mins) / len(mins)) if mins else None}
+        out["heating"] = bool(self.runs and self.runs[-1][1] is None)
+        return out
+
+    def plan_hour(self, now: datetime):
+        """Input for this UTC hour, including before a new plan is ready at the hour boundary."""
+        if self.plan_at is None:
+            return None
+        i = int(now.timestamp() // 3600) - int(self.plan_at // 3600)
+        return self.plan_hours[i] if 0 <= i < len(self.plan_hours) else None
 
     def _hours_ahead(self, now: datetime, prices: list[value.HourPrices], tariff: list[float]) -> list[planner.HourIn]:
         base = int(now.timestamp() // 3600 * 3600)
@@ -560,53 +625,157 @@ class RoostManager(PricesMixin, QuattMixin, HourLogMixin, HealthMixin, CareMixin
             if i == 0 and self.pump_state() in DHW_STATES:
                 dhw = max(dhw, 0.5)                     # making hot water right now
             rad = self.sun_on_house(base + i * 3600, wx)
+            mask = None
+            if self.conf.get(schedule.ENABLED):
+                mask = tuple(self.is_day(dt_util.as_local(datetime.fromtimestamp(base+i*3600+q*900, tz=timezone.utc)))
+                             for q in range(4))
             out.append(planner.HourIn(t_out=wx[0], wind=wx[2] if wx[2] is not None else 3.5, rad=rad,
-                                      p_grid=p.p_grid, p_own=p.p_own, own_kw=p.own_kw, day=self.is_day(loc), hour=loc.hour, dhw=dhw,
+                                      p_grid=p.p_grid, p_own=p.p_own, own_kw=p.own_kw, day=any(mask) if mask else self.is_day(loc),
+                                      comfort_mask=mask, hour=loc.hour, dhw=dhw,
                                       extra_kw=check.fade(self.corr_kw, i), away=self.is_away(base + i * 3600),
                                       p_imp=tariff[i] if i < len(tariff) else None))
         return out
 
-    async def _async_plan(self, now: datetime) -> None:
+    def _why_plan(self, now: datetime, e, force: str | None) -> str | None:
+        """Why to make the plan afresh now (stick.why_plan), from what Roost measures and the forecasts now."""
+        t = now.timestamp()
+        c = self.commit
+        tariff = list(e[0].import_price) if e else None
+        base = int(t // 3600 * 3600)
+        t_out, rad = [], []
+        for i in range(stick.WEATHER_H):
+            wx = self._weather.get(base + i * 3600)
+            if wx is None:
+                break
+            t_out.append(wx[0])
+            rad.append(self.sun_on_house(base + i * 3600, wx))
+        pv = self._pv_forecast(t, stick.WEATHER_H) if e and self.conf.get(CONF_PV_FORECAST) else None
+        pv_now = self._watch.feed_pv(t, self._kw(self.conf.get(CONF_PV_POWER))) if self.conf.get(CONF_PV_FORECAST) else None
+        coarse = window.reading_step(self.window.changes) >= 0.3
+        why = stick.why_plan(c, t, room=self.room(), coarse=coarse, tariff=tariff, t_out=t_out, rad=rad, pv=pv,
+                             pv_now_kw=pv_now, watch=self._watch, force=force)
+        if why is None and c is not None and self.fallback == "no_price" and e:
+            why = "prices"                                  # prices are back
+        return why
+
+    def _flat_energy(self, now: datetime, hours: int = 24):
+        """No price: one flat price for every hour (the last known import price), so Roost still plans for comfort and
+        the weather, without moving heat to cheaper hours."""
+        known = [v for d in self.price_seen.values() for _, v in sorted(d.items())[-1:]]
+        p = self.plan_tariff[0] if self.plan_tariff else (known[0] if known else 0.25)
+        inp = value.EnergyInputs(import_price=[p] * hours, export_price=[p] * hours)
+        ev = value.EnergyValue(value=[p] * hours, source=[value.SOURCE_GRID] * hours, surplus_kwh=[0.0] * hours)
+        return inp, ev
+
+    def _plan_failed(self, code: str, t: float) -> None:
+        """No plan could be made. The plan held stays for its current hour for FALLBACK_MIN; after that, the comfort
+        schedule (fallback "schedule") rather than whatever the thermostat was last given (a high setpoint to store heat,
+        or a low one in an expensive hour)."""
+        self.reason = Reason(code)
+        self._fail_since = self._fail_since or t
+        self._note_no_plan()
+        if t - self._fail_since >= FALLBACK_MIN * 60:
+            self.plan, self.plan_hours, self.plan_tariff, self.plan_guess = None, [], [], []
+            self.commit = None
+            if self.fallback != "schedule":
+                self.event("fallback", to="schedule", why=code)
+            self.fallback = "schedule"
+            self.reason = Reason("fallback_schedule")
+        self._issue("fallback", bool(self.fallback and t - self._fail_since >= FALLBACK_NOTICE_H * 3600),
+                    placeholders={"why": code})
+
+    def fallback_sp(self, t: float) -> float:
+        """The comfort schedule: comfort in the comfort hours, the night minimum outside them, the away minimum away."""
+        if self.is_away(t):
+            return self.settings().away_min
+        if self.is_day(dt_util.as_local(datetime.fromtimestamp(t, tz=timezone.utc))):
+            return float(self.conf[CONF_COMFORT])
+        return float(self.conf[CONF_NIGHT_MIN])
+
+    def planned_sp(self, t: float) -> float | None:
+        """The setpoint for now: the plan's for this hour, or the fallback."""
+        if self.plan is not None and self.plan_at is not None:
+            i = int(t // 3600) - int(self.plan_at // 3600)
+            if 0 <= i < len(self.plan.hours):
+                return self.plan.hours[i].sp
+        if self.fallback == "schedule":
+            return self.fallback_sp(t)
+        return None
+
+    async def _async_plan(self, now: datetime, why: str | None = None, e=...) -> None:
         self._planning = True
         try:
-            e = self._energy(now, 36)                 # plan 36 h, show 24: the end of the horizon does not distort what is shown
+            t = now.timestamp()
+            if e is ...:
+                e = self._energy(now, 36)             # up to 36 h, bounded by published tariffs
             room = self.room()
+            fallback = None
+            if e is None and room is not None and self._fail_since and t - self._fail_since >= FALLBACK_MIN * 60:
+                e, fallback = self._flat_energy(now), "no_price"
+                why = why or "fallback"
             if e is None or room is None:
-                self.reason = Reason("no_price" if e is None else "no_room")
-                self._note_no_plan()
+                self._plan_failed("no_price" if e is None else "no_room", t)
                 return
             inp, ev = e
             prices = value.planner_prices(inp, ev)
             self.corr_kw, self.corr_n = check.correction(self.hour_log, self.house, self.pump, now.timestamp())
             hours = self._hours_ahead(now, prices, inp.import_price)
             if not hours:
-                self.reason = Reason("no_weather")
-                self._note_no_plan()
+                self._plan_failed("no_weather", t)
                 return
             s = self.settings()
             w_now = self._kw(self.ent.get("power_out")) if self.pump_state() == "heating" else 0.0
             room_in, room_meta = self._rooms_ahead(hours)
             mode = self.conf.get(CONF_PRICE_MODE)
-            guess = [] if mode == "fixed" else list(self._price_guess.get("epex_import" if mode == "epex" else self.conf.get(CONF_IMPORT_PRICE)) or [])
+            guess = [] if mode == "fixed" else list(self._price_guess.get("epex_import" if mode == "epex" else self.conf.get(CONF_IMPORT_PRICE)) or [])[:len(hours)]
             sp_now = self.thermostat_sp() if self.thermostat_sp() is not None else self.mem.last_sp
-            p = await self.hass.async_add_executor_job(planner.plan, self.house, self.pump, s, hours, room, self.storage_e,
-                                                       sp_now, 24, w_now, room_in)
+            # the plan held: keep its setpoints and work out what they give now; a reason: plan afresh
+            fixed = None
+            if why is None and self.commit is not None and (self.commit.fallback or None) == fallback:
+                fixed = self.commit.setpoints(t)
+                if not fixed:
+                    why = "horizon"
+            elif why is None:
+                why = "first"
+            p = await self.hass.async_add_executor_job(partial(planner.plan, self.house, self.pump, s, hours, room,
+                                                               self.storage_e, sp_now, 24, w_now, room_in,
+                                                               fixed=fixed or None, extra_rooms=len(self.rooms)))
+            if not fixed:
+                self.commit = stick.Commitment(at=t, hour0=int(t // 3600 * 3600), sp=[x.sp for x in p.hours], room0=room,
+                                               t_end=[round(x.t_end, 3) for x in p.hours], t_out=[h.t_out for h in hours],
+                                               rad=[h.rad for h in hours], tariff=list(inp.import_price),
+                                               pv=list(inp.pv_kwh) if inp.pv_kwh and self.conf.get(CONF_PV_FORECAST) else None,
+                                               fallback=fallback)
+                self._watch.room_off = 0
+                self.plan_why = why
+                self.event("plan", why=why, sp=[x.sp for x in p.hours[:6]], fallback=fallback)
+            if self.fallback != fallback:
+                if fallback:
+                    self.event("fallback", to=fallback, why="no_price")
+                self.fallback = fallback
+            if not fallback:
+                self._fail_since = None
+                self._issue("fallback", False)
             self.plan_on_guess = False
-            neutral = planner.neutral_prices(hours, guess)
-            if neutral is not None and p.first is not None:
-                q = await self.hass.async_add_executor_job(planner.plan, self.house, self.pump, s, neutral, room, self.storage_e,
-                                                           sp_now, 24, w_now, room_in)
-                if q.first is not None and abs(q.first.sp - p.first.sp) > 0.01:
-                    # this hour only differs through prices that are not published yet: keep to the plan without them
-                    p, hours, self.plan_on_guess = q, neutral, True
-            self.room_status = [{**meta, "expected": temps[:24]} for meta, temps in zip(room_meta, p.rooms)]
+            if len(p.hours) < 24:
+                # A partial tariff horizon is usable for steering, not a complete next-24-hour saving estimate.
+                quality = {**p.breakdown["quality"], "valid": False, "status": "incomplete_forecast",
+                           "reasons": p.breakdown["quality"]["reasons"] + ["incomplete_forecast"]}
+                p.breakdown = savings.publish(p.breakdown, quality)
+            if fallback:
+                quality = {**p.breakdown["quality"], "valid": False, "status": "fallback",
+                           "reasons": p.breakdown["quality"]["reasons"] + ["no_price"]}
+                p.breakdown = savings.publish(p.breakdown, quality)
+            seen = [m for m in room_meta if m.get("available", True)]
+            self.room_status = [{**meta, "expected": temps[:24]} for meta, temps in zip(seen, p.rooms)] + \
+                               [m for m in room_meta if not m.get("available", True)]
             self.plan, self.plan_hours, self.plan_at, self.plan_w_now = p, hours, now.timestamp(), w_now
             self.plan_tariff = list(inp.import_price)
             self.plan_guess = guess
             self._remember_prediction(now, p)
             try:
                 snap = replan.snapshot(now.timestamp(), int(now.timestamp() // 3600 * 3600), p, hours, inp.import_price, guess, room,
-                                       self.corr_kw, vars(s), self.plan_on_guess)
+                                       self.corr_kw, {**vars(s), "comfort_schedule": schedule.context(self.conf)}, self.plan_on_guess)
                 line = replan.compare(self._plan_snap, snap, room)
                 if line:
                     self.plan_changes = replan.prune(self.plan_changes + [line], now.timestamp())
@@ -615,42 +784,87 @@ class RoostManager(PricesMixin, QuattMixin, HourLogMixin, HealthMixin, CareMixin
                 _LOGGER.debug("plan change log: %s", err)
                 self._plan_snap = None
             self.reason = planner.explain(p, hours, room, s, self.pump, self.house, self.conf.get(CONF_EMITTER, "floor") == "floor")
+            if fallback:
+                self.reason = Reason("fallback_no_price")
             self._last_reason_code = None
         finally:
             self._planning = False
 
+    async def _async_write(self, sp: float) -> bool:
+        """Set the thermostat (Roost's own context, so it is not taken for a change by hand)."""
+        ctx = Context()
+        self._contexts[ctx.id] = time.time()
+        await self.hass.services.async_call("climate", "set_temperature",
+                                            {ATTR_ENTITY_ID: self.conf[CONF_THERMOSTAT], "temperature": self._c_to_sys(sp)},
+                                            blocking=True, context=ctx)
+        return True
+
+    async def _async_airing(self, t: float) -> None:
+        """A window/door sensor says open: the thermostat to the lowest setpoint so the unit stops heating the outdoors
+        (not for a fall of the room alone: that can be a false alarm). Back to the plan when it closes (_watch_window)."""
+        self.reason = Reason("airing")
+        cur = self.thermostat_sp()
+        low = float(self.conf.get(CONF_SP_MIN, self.conf[CONF_NIGHT_MIN]))
+        paused = bool(self.mem.pause_until and t < self.mem.pause_until)
+        if (self.mode == "active" and not paused and self._airing_from is None and cur is not None and cur > low + 0.01
+                and self.thermostat_reachable()):
+            try:
+                await self._async_write(low)
+                self._airing_from = cur
+                self.event("airing", old=cur, new=low)
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.warning("Roost could not lower the thermostat for an open window: %s", err)
+                self.event("set_failed", new=low, error=str(err)[:200])
+        self.decision = control.Decision(None, Reason("airing"), self.thermostat_sp())
+
     async def _async_control(self, t: float) -> None:
         if self.window.active():
-            # airing: changing the thermostat now would heat the outdoors; wait until the room is back
+            if self.window.via == "contact":
+                await self._async_airing(t)
+                return
+            # airing seen from the room alone: changing the thermostat now would heat the outdoors; wait until the room is back
             self.reason = Reason("window_open")
             self.decision = control.Decision(None, Reason("window_open"), self.thermostat_sp())
             return
-        if self.mode == "off" or self.plan is None or self.plan.first is None:
+        planned = self.planned_sp(t)
+        if self.mode == "off" or planned is None:
             self.decision = control.Decision(None, Reason("off") if self.mode == "off" else self.reason, self.thermostat_sp())
             return
         if self.mode == "active" and not self.thermostat_reachable():
             self.decision = control.Decision(None, Reason("no_plan"), None)     # unreachable: leave it alone (a notice follows)
             return
-        hard = (self.settings().away_min if self.is_away(t) else float(self.conf[CONF_DAY_MIN]) if self.plan_hours and self.plan_hours[0].day
+        hard = (self.settings().away_min if self.is_away(t) else float(self.conf[CONF_DAY_MIN]) if self.is_day(dt_util.as_local(datetime.fromtimestamp(t, tz=timezone.utc)))
                 else float(self.conf[CONF_NIGHT_MIN]))
-        d = control.decide(t, self.plan.first.sp, self.thermostat_sp(), self.room(), hard,
+        current = self.thermostat_sp() if self.mode == "active" or self.mem.virtual_sp is None else self.mem.virtual_sp
+        room = self.room()
+        if (self._heating_since is not None and t - self._heating_since < MIN_RUN_MIN * 60 and current is not None
+                and planned < current - 0.01 and (room is None or room < self.settings().store_max)
+                and not (self.mem.pause_until and t < self.mem.pause_until)):
+            # the unit just started: a short run wears it and wastes the warm-up; lower once it has run a while
+            mins = round(MIN_RUN_MIN - (t - self._heating_since) / 60)
+            self.decision = control.Decision(None, Reason("min_run", {"min": mins}), current)
+            return
+        before = (self.mem.last_write, self.mem.last_sp)
+        d = control.decide(t, planned, self.thermostat_sp(), room, hard,
                            self.mem, self.control_settings(), self.mode == "active")
         self.decision = d
         if d.setpoint is not None and self.mode == "active":
-            ctx = Context()
-            self._contexts[ctx.id] = time.time()
-            before = self.thermostat_sp()
+            old = self.thermostat_sp()
             try:
-                await self.hass.services.async_call("climate", "set_temperature",
-                                                    {ATTR_ENTITY_ID: self.conf[CONF_THERMOSTAT], "temperature": self._c_to_sys(d.setpoint)},
-                                                    blocking=True, context=ctx)
-                self.event("set", old=before, new=d.setpoint, why=d.why.code, reason=self.reason.code, args=dict(self.reason.args),
-                           room=self.room())
+                await self._async_write(d.setpoint)
+                self.event("set", old=old, new=d.setpoint, why=d.why.code, reason=self.reason.code, args=dict(self.reason.args),
+                           room=room)
                 self._set_result(True)
             except Exception as err:  # noqa: BLE001
                 _LOGGER.warning("Roost could not set the thermostat: %s", err)
                 self.event("set_failed", new=d.setpoint, error=str(err)[:200])
                 self._set_result(False, str(err))
+                # not applied: the change interval does not start; try again soon, later after each failure
+                interval = self.control_settings().min_interval_min
+                retry = min(interval, 5 * 2 ** max(0, self._set_fails - 1))
+                self.mem.last_write = t - (interval - retry) * 60
+                self.mem.last_sp = before[1]
+                self.decision = control.Decision(None, Reason("set_failed", {"min": round(retry)}), old)
         if d.setpoint is not None:
             await self.async_save()
 
@@ -686,6 +900,9 @@ class RoostManager(PricesMixin, QuattMixin, HourLogMixin, HealthMixin, CareMixin
                         e["q"] = round(self._heat_acc, 2)
                         e["e"] = round(self._elec_acc, 3)
                         e["cost"] = round(self._cost_acc, 4)
+                        e["T_end"] = self.room()
+                        if self._sp_acc[1] >= 1800:
+                            e["sp_mean"] = round(self._sp_acc[0] / self._sp_acc[1], 2)
                         self._sources_close(e)
                 a = self._sp_acc
                 if a[1] >= 1800:                      # at least half the hour seen
@@ -801,13 +1018,14 @@ class RoostManager(PricesMixin, QuattMixin, HourLogMixin, HealthMixin, CareMixin
             prof = response.dhw_profile(samples)
             if prof:
                 pump.dhw, pump.dhw_weeks = prof, round(len(samples) / 168, 1)
-            self.house, self.pump = house.model, pump
-            self.check = await self.hass.async_add_executor_job(check.self_check, rows, self.house, self.pump)
-            if self.check.get("heating_hours", 0) < check.READY_HEATING_HOURS:      # mild weather: the last heating weeks decide
-                winter = await self.hass.async_add_executor_job(check.winter_check, rows, self.house, self.pump)
+            # check the new pair before it is used: a failure from here on keeps the models, check and readiness it had
+            chk = await self.hass.async_add_executor_job(check.self_check, rows, house.model, pump)
+            if chk.get("heating_hours", 0) < check.READY_HEATING_HOURS:      # mild weather: the last heating weeks decide
+                winter = await self.hass.async_add_executor_job(check.winter_check, rows, house.model, pump)
                 if winter:
-                    self.check["winter"] = winter
-            self.check["at"] = dt_util.now().isoformat(timespec="seconds")
+                    chk["winter"] = winter
+            chk["at"] = dt_util.now().isoformat(timespec="seconds")
+            self.house, self.pump, self.check = house.model, pump, chk
             lever = not (self.pump.resp_source == "learned" and self.pump.k is not None and self.pump.k < NO_LEVER_KW)
             self._issue("no_lever", not lever, placeholders={"k": f"{self.pump.k or 0:.2f}"})
             self.ready, self.ready_missing = check.readiness(self.check, self.following, lever, self.check.get("winter"))

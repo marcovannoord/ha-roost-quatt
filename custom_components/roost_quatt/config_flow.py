@@ -27,7 +27,7 @@ from .const import (
     CONF_EPEX_ZONE, CONF_WINDOW_SENSORS, CONF_IMPORT_MULT, CONF_IMPORT_ADD, CONF_EXPORT_FORMULA, CONF_EXPORT_MULT, CONF_EXPORT_ADD,
     CONF_NOTIFY, CONF_WEEKLY,
 )
-from . import check, comfort, detect, epex, quatt
+from . import check, comfort, detect, epex, quatt, schedule
 from .rooms import KINDS as ROOM_KINDS
 
 _LOGGER = logging.getLogger(__name__)
@@ -190,20 +190,41 @@ def comfort_schema() -> vol.Schema:
         vol.Required(CONF_DAY_MIN, default=d[CONF_DAY_MIN]): DEG,
         vol.Required(CONF_NIGHT_MIN, default=d[CONF_NIGHT_MIN]): DEG,
         vol.Required(CONF_STORE_MAX, default=d[CONF_STORE_MAX]): DEG,
+        vol.Optional(schedule.SECTION): section(vol.Schema({
+            vol.Required("enabled", default=False): selector.BooleanSelector(),
+            **{vol.Optional(day, default=""): selector.TextSelector() for day in schedule.DAYS},
+        }), {"collapsed": True}),
         vol.Required(ADVANCED): section(advanced, {"collapsed": True}),
     })
 
 
 def _flat(user_input: dict) -> dict:
     """A form with a section -> one level, as stored."""
-    out = {k: v for k, v in user_input.items() if k != ADVANCED}
+    out = {k: v for k, v in user_input.items() if k not in (ADVANCED, schedule.SECTION)}
     out.update(user_input.get(ADVANCED) or {})
+    if schedule.SECTION in user_input:
+        weekly = user_input[schedule.SECTION] or {}
+        out[schedule.ENABLED] = bool(weekly.get("enabled", False))
+        raw = {day: weekly.get(day, "") for day in schedule.DAYS}
+        try:
+            out[schedule.WEEK] = schedule.normalise(raw)
+        except ValueError:
+            out[schedule.WEEK] = raw             # keep the invalid input visible for correction
     return out
 
 
 def _nested(values: dict) -> dict:
     """Stored values -> suggested values for a form with the 'advanced' section."""
-    return {**{k: v for k, v in values.items() if k not in ADVANCED_KEYS}, ADVANCED: {k: values[k] for k in ADVANCED_KEYS if k in values}}
+    legacy = [[int(values.get(CONF_DAY_FROM, DEFAULTS[CONF_DAY_FROM]))*60,
+               int(values.get(CONF_DAY_TO, DEFAULTS[CONF_DAY_TO]))*60]]
+    week = values.get(schedule.WEEK, {})
+    weekly = {"enabled": bool(values.get(schedule.ENABLED, False))}
+    for day in schedule.DAYS:
+        periods = week.get(day, legacy)
+        weekly[day] = periods if isinstance(periods, str) else schedule.format_day(periods)
+    return {**{k: v for k, v in values.items() if k not in (*ADVANCED_KEYS, schedule.ENABLED, schedule.WEEK)},
+            ADVANCED: {k: values[k] for k in ADVANCED_KEYS if k in values},
+            schedule.SECTION: weekly}
 
 
 def _suggest(hass: HomeAssistant, values: dict, found: dict) -> dict:
@@ -232,6 +253,13 @@ def _check_price(d: dict) -> dict[str, str]:
 
 def _check_comfort(d: dict) -> dict[str, str]:
     errors = {}
+    if schedule.WEEK in d:
+        try:
+            schedule.normalise(d[schedule.WEEK])
+        except ValueError:
+            errors["base"] = "invalid_schedule"
+    elif d.get(schedule.ENABLED):
+        errors["base"] = "invalid_schedule"
     if float(d[CONF_COMFORT]) < float(d[CONF_DAY_MIN]):
         errors[CONF_COMFORT] = "comfort_below_min"
     if float(d[CONF_STORE_MAX]) < float(d[CONF_COMFORT]):
@@ -292,7 +320,7 @@ def _summary(hass: HomeAssistant, o: dict, rooms: int) -> dict[str, str]:
         "house": " · ".join(x for x in (detect.friendly(hass, o.get(CONF_THERMOSTAT)), detect.friendly(hass, o.get(CONF_ROOM)) if o.get(CONF_ROOM) else "") if x),
         "price": price,
         "solar": " · ".join(solar) or "—",
-        "comfort": f"{int(o[CONF_DAY_FROM])}–{int(o[CONF_DAY_TO])} · {n(o[CONF_COMFORT])} °C · min {n(o[CONF_DAY_MIN])} / {n(o[CONF_NIGHT_MIN])} °C",
+        "comfort": f"{_texts(hass)['weekly'] if o.get(schedule.ENABLED) else str(int(o[CONF_DAY_FROM])) + '–' + str(int(o[CONF_DAY_TO]))} · {n(o[CONF_COMFORT])} °C · min {n(o[CONF_DAY_MIN])} / {n(o[CONF_NIGHT_MIN])} °C",
         "rooms": str(rooms),
     }
 
@@ -310,7 +338,7 @@ def room_schema() -> vol.Schema:
 
 
 ETA_TEXT = {
-    "en": {"ready": "now.", "lever": "not yet: the setpoint does not move the heat pump (see the repair notice).",
+    "en": {"weekly": "Weekly schedule", "ready": "now.", "lever": "not yet: the setpoint does not move the heat pump (see the repair notice).",
            "following": "not yet: the heat pump heats while the thermostat asks for no heat (is the thermostat on the Quatt CIC over OpenTherm?).",
            "import": "around {time}, after the import from the statistics and the learning that follows, if the self-check then passes.",
            "heating": "around {time}: it needs more heating hours first.",
@@ -322,7 +350,7 @@ ETA_TEXT = {
                                                 "solar": "Solar and home battery", "comfort": "Comfort", "notify": "Notifications"},
            "basis_winter": "the last {weeks} heating weeks of the past year, because the last week had too little heating — {passed} of {weeks} good on their own (needs {need}), and the medians below must be within the limits",
            "today": "today", "tomorrow": "tomorrow"},
-    "nl": {"ready": "nu.", "lever": "nog niet: het setpoint stuurt de warmtepomp niet (zie de reparatiemelding).",
+    "nl": {"weekly": "Weekplanning", "ready": "nu.", "lever": "nog niet: het setpoint stuurt de warmtepomp niet (zie de reparatiemelding).",
            "following": "nog niet: de warmtepomp verwarmt terwijl de thermostaat geen warmte vraagt (zit de thermostaat via OpenTherm op de Quatt CIC?).",
            "import": "rond {time}, na de import uit de statistieken en het leren daarna, als de zelfcontrole dan slaagt.",
            "heating": "rond {time}: er zijn eerst meer stookuren nodig.",
@@ -334,7 +362,7 @@ ETA_TEXT = {
                                                     "solar": "Zon en thuisaccu", "comfort": "Comfort", "notify": "Meldingen"},
            "basis_winter": "de laatste {weeks} stookweken van het afgelopen jaar, omdat de afgelopen week te weinig stookte — {passed} van {weeks} los goed (nodig: {need}), en de medianen hieronder moeten binnen de grenzen liggen",
            "today": "vandaag", "tomorrow": "morgen"},
-    "de": {"ready": "jetzt.", "lever": "noch nicht: der Sollwert bewegt die Wärmepumpe nicht (siehe die Reparaturmeldung).",
+    "de": {"weekly": "Wochenplan", "ready": "jetzt.", "lever": "noch nicht: der Sollwert bewegt die Wärmepumpe nicht (siehe die Reparaturmeldung).",
            "following": "noch nicht: die Wärmepumpe heizt, während das Thermostat keine Wärme anfordert (hängt das Thermostat per OpenTherm am Quatt CIC?).",
            "import": "gegen {time}, nach dem Import aus den Statistiken und dem Lernen danach, wenn die Selbstprüfung dann besteht.",
            "heating": "gegen {time}: es braucht erst mehr Heizstunden.",
@@ -346,7 +374,7 @@ ETA_TEXT = {
                                                     "solar": "Solar und Heimspeicher", "comfort": "Komfort", "notify": "Benachrichtigungen"},
            "basis_winter": "den letzten {weeks} Heizwochen des vergangenen Jahres, weil die letzte Woche zu wenig geheizt hat — {passed} von {weeks} einzeln gut (nötig: {need}), und die Mediane unten müssen innerhalb der Grenzen liegen",
            "today": "heute", "tomorrow": "morgen"},
-    "fr": {"ready": "maintenant.", "lever": "pas encore : la consigne ne fait pas varier la pompe à chaleur (voir la notification de réparation).",
+    "fr": {"weekly": "Planning hebdomadaire", "ready": "maintenant.", "lever": "pas encore : la consigne ne fait pas varier la pompe à chaleur (voir la notification de réparation).",
            "following": "pas encore : la pompe à chaleur chauffe alors que le thermostat ne demande pas de chaleur (le thermostat est-il relié au CIC Quatt en OpenTherm ?).",
            "import": "vers {time}, après l'import des statistiques et l'apprentissage qui suit, si l'auto-contrôle réussit alors.",
            "heating": "vers {time} : il faut d'abord plus d'heures de chauffe.",
@@ -521,6 +549,9 @@ class RoostOptionsFlow(OptionsFlow):
 
     def _update(self, schema: vol.Schema, user_input: dict) -> None:
         for key in schema.schema:
+            if str(key) == schedule.SECTION and schedule.SECTION in user_input:
+                self.opts.pop(schedule.ENABLED, None)
+                self.opts.pop(schedule.WEEK, None)
             if str(key) == ADVANCED:
                 for k in ADVANCED_KEYS:
                     self.opts.pop(k, None)

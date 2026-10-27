@@ -47,7 +47,10 @@ def compare(old: dict | None, new: dict, room: float) -> dict | None:
         return None
     why, detail = [], {}
     n = min(len(old["sp"]) - shift, len(new["sp"]))
-    published = changed = 0
+    published = sum(1 for k in range(n, len(new["price"]))
+                    if len(old["sp"]) < 24 and k + shift >= len(old["price"])
+                    and not (new["guess"][k] if k < len(new["guess"]) else False))
+    changed = 0
     for k in range(n):
         og = old["guess"][k + shift] if k + shift < len(old["guess"]) else False
         ng = new["guess"][k] if k < len(new["guess"]) else False

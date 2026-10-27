@@ -35,6 +35,12 @@ check = load("check")
 response = load("response")
 rooms_mod = load("rooms")
 value = load("value")
+stick = load("stick")
+
+# A/B switches: SIM_FADE=1 Roost plans as if the unit's output fades after the thermostat stops asking (before v0.8.0;
+# the true unit stops at once), SIM_HOLD=1 the plan is held between reasons to plan afresh (stick.py, v0.8.0)
+FADE = os.environ.get("SIM_FADE") == "1"
+HOLD = os.environ.get("SIM_HOLD") == "1"
 
 DAY0 = 20_450                     # 2025-12-29 (a Monday)
 HIST_DAYS = 40
@@ -242,6 +248,8 @@ def run(name: str, days: int = 7, seed: int = 1) -> dict:
     rows, T0, E0, w0 = history(sc, rnd)
     house, pump, house_note, pump_note = learn(sc, rows)
     true_house, true_hp = true_models(sc)
+    if FADE:
+        pump.stops = False
     over = json.loads(os.environ.get("SIM_SETTINGS", "{}"))       # try planner settings: SIM_SETTINGS='{"switch_cost": 0.15}'
     s = planner.Settings(**{**dict(comfort=20.5, day_min=20.0, night_min=19.0, store_max=22.5, sp_min=19.0), **sc.settings, **over})
     cs = control.ControlSettings()
@@ -271,7 +279,8 @@ def run(name: str, days: int = 7, seed: int = 1) -> dict:
         Tr = 18.0
         mem = control.ControlMemory()
         log, out = [], {"trace": [], "cost": 0.0, "kwh": 0.0, "deg_below": 0.0, "hours_below_min": 0, "low": 99.0, "changes": 0,
-                        "room_below": 0, "room_low": 99.0, "max_sp": 0.0}
+                        "room_below": 0, "room_low": 99.0, "max_sp": 0.0, "starts": 0, "replans": 0}
+        held, watch, q_prev = None, stick.Watch(), 0.0
         start = DAY0 * 86400
         for k in range(days * 24):
             ts = start + k * 3600
@@ -293,7 +302,18 @@ def run(name: str, days: int = 7, seed: int = 1) -> dict:
                 if sc.room:
                     act = [rooms_mod.active(x.hour, sc.room["from"], sc.room["to"]) for x in hours]
                     room_in = [{"model": room_known, "T": Tr, "min": sc.room["min"], "active": act}]
-                p = planner.plan(house, pump, s, hours, T, E, sp_t, 24, w, room_in)
+                fixed = None
+                if HOLD:
+                    why = stick.why_plan(held, ts, room=T, coarse=False, tariff=[x.p_grid for x in hours],
+                                         t_out=[x.t_out for x in hours[:6]], rad=[x.rad for x in hours[:6]], pv=None,
+                                         pv_now_kw=None, watch=watch)
+                    fixed = None if why else held.setpoints(ts)
+                p = planner.plan(house, pump, s, hours, T, E, sp_t, 24, w, room_in, fixed=fixed or None)
+                if HOLD and not fixed:
+                    out["replans"] += 1
+                    held = stick.Commitment(at=ts, hour0=ts, sp=[x.sp for x in p.hours], room0=T, t_end=[x.t_end for x in p.hours],
+                                            t_out=[x.t_out for x in hours], rad=[x.rad for x in hours],
+                                            tariff=[x.p_grid for x in hours])
                 d = control.decide(ts, p.first.sp, sp_t, T, s.day_min if day else s.night_min, mem, cs, True)
                 if d.setpoint is not None and d.setpoint != sp_t:
                     out["changes"] += 1
@@ -304,6 +324,8 @@ def run(name: str, days: int = 7, seed: int = 1) -> dict:
             hin = planner.HourIn(t_out=t, wind=wind, rad=rad, p_grid=price[ts], p_own=price[ts], day=day, hour=h, extra_kw=gains[ts])
             T1, E1, c, e, q, _pen = truth.hour(T, E, sp_t, hin, w)
             w = truth.w_end
+            out["starts"] += q > 0.05 and q_prev <= 0.05
+            q_prev = q
             log.append({"ts": ts, "T": T, "E": E, "sp_t": sp_t, "t_out": t, "wind": wind, "rad": rad, "dhw": 0.0, "q": q, "hour": h})
             log = log[-12:]
             if room_true:
@@ -349,12 +371,12 @@ def run(name: str, days: int = 7, seed: int = 1) -> dict:
 
 def table(results: list[dict]) -> str:
     lines = [f"{'scenario':10} {'cost R':>7} {'cost S':>7} {'saved':>6} {'kWh R':>6} {'kWh S':>6} {'°h<comf R':>9} {'S':>5} "
-             f"{'h<min':>5} {'low R':>5} {'low S':>5} {'chg':>4} {'maxsp':>5} {'room<':>5}"]
+             f"{'h<min':>5} {'low R':>5} {'low S':>5} {'chg':>4} {'starts':>6} {'maxsp':>5} {'room<':>5}"]
     for x in results:
         r, b = x["roost"], x["steady"]
         sav = (b["cost_level"] - r["cost_level"]) / b["cost_level"] * 100 if b["cost_level"] else 0
         lines.append(f"{x['name']:10} {r['cost_level']:7.2f} {b['cost_level']:7.2f} {sav:5.1f}% {r['kwh']:6.1f} {b['kwh']:6.1f} {r['deg_below']:9.1f} "
-                     f"{b['deg_below']:5.1f} {r['hours_below_min']:5d} {r['low']:5.1f} {b['low']:5.1f} {r['changes']:4d} {r['max_sp']:5.1f} "
+                     f"{b['deg_below']:5.1f} {r['hours_below_min']:5d} {r['low']:5.1f} {b['low']:5.1f} {r['changes']:4d} {r['starts']:6d} {r['max_sp']:5.1f} "
                      f"{(str(r['room_below']) + '/' + str(b['room_below'])) if x['name'] == 'bedroom' else '':>5}")
     return "\n".join(lines)
 

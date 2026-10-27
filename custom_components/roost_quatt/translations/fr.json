@@ -127,12 +127,13 @@
           "day_from": "Début des heures de confort",
           "day_to": "Fin des heures de confort",
           "comfort": "Température de confort (jour)",
-          "day_min": "Jamais en dessous le jour",
-          "night_min": "Jamais en dessous la nuit",
+          "day_min": "Minimum pendant les périodes de confort",
+          "night_min": "Minimum hors des périodes de confort",
           "store_max": "Le plus chaud en stockant la chaleur"
         },
         "data_description": {
-          "store_max": "Roost stocke de la chaleur dans le sol (ou la maison) quand une heure est bon marché (ou que le solaire rapporte peu) et qu'une heure chère suit. Réglez-le égal à la température de confort pour désactiver cela."
+          "store_max": "Roost stocke de la chaleur dans le sol (ou la maison) quand une heure est bon marché (ou que le solaire rapporte peu) et qu'une heure chère suit. Réglez-le égal à la température de confort pour désactiver cela.",
+          "day_from": "Horaire quotidien par défaut (planning hebdomadaire désactivé)"
         },
         "sections": {
           "advanced": {
@@ -153,6 +154,20 @@
               "baseline_night": "L'économie est montrée par rapport à un thermostat constant à la température de confort, le conseil habituel pour les pompes à chaleur.",
               "weather_source": "Open-Meteo ne demande pas de compte et donne le rayonnement et le vent (le modèle de la maison utilise les deux)."
             }
+          },
+          "weekly_schedule": {
+            "name": "Heures de confort par jour",
+            "description": "Ces périodes remplacent les heures quotidiennes ci-dessus. Utilisez des quarts d’heure, par exemple 07:00-09:00, 17:00-22:00. Un jour vide signifie seulement la température minimale. 22:00-02:00 continue le lendemain. Roost prévoit le préchauffage avant la période de confort.",
+            "data": {
+              "enabled": "Utiliser un planning hebdomadaire",
+              "monday": "Lundi",
+              "tuesday": "Mardi",
+              "wednesday": "Mercredi",
+              "thursday": "Jeudi",
+              "friday": "Vendredi",
+              "saturday": "Samedi",
+              "sunday": "Dimanche"
+            }
           }
         }
       }
@@ -164,7 +179,8 @@
       "day_order": "Les heures de confort doivent finir après leur début.",
       "weather_needed": "Choisissez une entité météo (sous Avancé).",
       "lowest_above_comfort": "Le réglage le plus bas du thermostat ne doit pas dépasser la température de confort.",
-      "price_needed": "Choisissez un capteur de prix, ou un prix fixe."
+      "price_needed": "Choisissez un capteur de prix, ou un prix fixe.",
+      "invalid_schedule": "Vérifiez les périodes : HH:MM-HH:MM, séparées par des virgules, par pas de 15 minutes. Aucun chevauchement, même après minuit."
     },
     "abort": {
       "already_configured": "Cette pompe à chaleur est déjà configurée."
@@ -268,12 +284,13 @@
           "day_from": "Début des heures de confort",
           "day_to": "Fin des heures de confort",
           "comfort": "Température de confort (jour)",
-          "day_min": "Jamais en dessous le jour",
-          "night_min": "Jamais en dessous la nuit",
+          "day_min": "Minimum pendant les périodes de confort",
+          "night_min": "Minimum hors des périodes de confort",
           "store_max": "Le plus chaud en stockant la chaleur"
         },
         "data_description": {
-          "store_max": "Roost stocke de la chaleur dans le sol (ou la maison) quand une heure est bon marché (ou que le solaire rapporte peu) et qu'une heure chère suit. Réglez-le égal à la température de confort pour désactiver cela."
+          "store_max": "Roost stocke de la chaleur dans le sol (ou la maison) quand une heure est bon marché (ou que le solaire rapporte peu) et qu'une heure chère suit. Réglez-le égal à la température de confort pour désactiver cela.",
+          "day_from": "Horaire quotidien par défaut (planning hebdomadaire désactivé)"
         },
         "sections": {
           "advanced": {
@@ -293,6 +310,20 @@
               "max_above_room": "Garde un thermostat OpenTherm sur de l'eau tiède (COP élevé).",
               "baseline_night": "L'économie est montrée par rapport à un thermostat constant à la température de confort, le conseil habituel pour les pompes à chaleur.",
               "weather_source": "Open-Meteo ne demande pas de compte et donne le rayonnement et le vent (le modèle de la maison utilise les deux)."
+            }
+          },
+          "weekly_schedule": {
+            "name": "Heures de confort par jour",
+            "description": "Ces périodes remplacent les heures quotidiennes ci-dessus. Utilisez des quarts d’heure, par exemple 07:00-09:00, 17:00-22:00. Un jour vide signifie seulement la température minimale. 22:00-02:00 continue le lendemain. Roost prévoit le préchauffage avant la période de confort.",
+            "data": {
+              "enabled": "Utiliser un planning hebdomadaire",
+              "monday": "Lundi",
+              "tuesday": "Mardi",
+              "wednesday": "Mercredi",
+              "thursday": "Jeudi",
+              "friday": "Vendredi",
+              "saturday": "Samedi",
+              "sunday": "Dimanche"
             }
           }
         }
@@ -363,7 +394,8 @@
       "day_order": "Les heures de confort doivent finir après leur début.",
       "weather_needed": "Choisissez une entité météo (sous Avancé).",
       "lowest_above_comfort": "Le réglage le plus bas du thermostat ne doit pas dépasser la température de confort.",
-      "price_needed": "Choisissez un capteur de prix, ou un prix fixe."
+      "price_needed": "Choisissez un capteur de prix, ou un prix fixe.",
+      "invalid_schedule": "Vérifiez les périodes : HH:MM-HH:MM, séparées par des virgules, par pas de 15 minutes. Aucun chevauchement, même après minuit."
     },
     "abort": {
       "mode_set": "Le mode est réglé."
@@ -656,6 +688,22 @@
           }
         }
       }
+    },
+    "fallback": {
+      "title": "{name} : pilotage sans plan complet",
+      "description": "Depuis quelques heures, Roost ne peut pas établir de plan complet (pas de prix de l'électricité, de température de pièce ou de prévision météo). Il pilote en attendant en mode de secours : sans prix sur un prix fixe, sinon la température de confort aux heures de confort et le minimum de nuit en dehors. Vérifiez les capteurs de prix, de pièce et de météo dans les réglages de Roost ; l'avis disparaît dès qu'un plan complet est de nouveau possible."
+    },
+    "house_cold": {
+      "title": "{name} : la maison reste sous son minimum",
+      "description": "Roost pilote le thermostat, mais la pièce est à {room} °C depuis une heure, bien sous son minimum de {minimum} °C. La pompe à chaleur ne suit peut-être pas, le thermostat ne transmet pas la consigne ou le modèle de la maison est loin. Vérifiez la pompe à chaleur et le thermostat ; Roost continue de corriger."
+    },
+    "price_no_forecast_estimated": {
+      "title": "{name} : le capteur de prix n'a pas de prévision",
+      "description": "{entity} ne donne que le prix actuel, qui change chaque heure (un contrat dynamique). Roost estime les heures à venir à partir des prix day-ahead, comme ce capteur les suivait. Un capteur avec les prix des 24 prochaines heures au moins dans ses attributs, ou les prix day-ahead intégrés avec la formule de votre contrat, planifie plus précisément."
+    },
+    "price_no_forecast_flat": {
+      "title": "{name} : le capteur de prix n'a pas de prévision",
+      "description": "{entity} ne donne que le prix actuel, qui change d'heure en heure. Roost ne peut pas (encore) en déduire les heures à venir et planifie sur un prix fixe : il ne déplace pas le chauffage vers les heures moins chères. Choisissez un capteur avec les prix des 24 prochaines heures au moins dans ses attributs, ou les prix day-ahead intégrés avec la formule de votre contrat."
     }
   },
   "services": {
@@ -717,6 +765,13 @@
         },
         "day_to": {
           "name": "Heures de confort jusqu'à"
+        },
+        "weekly_comfort": {
+          "name": "Heures de confort par jour activées"
+        },
+        "comfort_schedule": {
+          "name": "Heures de confort par jour",
+          "description": "Par jour une liste de périodes, comme \"07:00-09:00, 17:30-22:00\" ou [[420, 540]] en minutes ; quarts d'heure, une période peut passer minuit."
         }
       }
     },

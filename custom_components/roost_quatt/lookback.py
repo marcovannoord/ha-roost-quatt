@@ -18,9 +18,10 @@ def day_stats(entries: list[dict], comfort: float, by_hand: int = 0, cost_replay
     heat = sum(e.get("q") or 0.0 for e in entries)
     cost = sum(e.get("cost") or 0.0 for e in entries)
     temps = [e["T"] for e in entries if e.get("T") is not None]
-    day = [e for e in entries if e.get("day") and e.get("T") is not None]
-    deficit = sum(max(0.0, comfort - e["T"]) for e in day)
-    below = sum(60 for e in day if e["T"] < comfort - 0.3)
+    day = [e for e in entries if e.get("day") and not e.get("away") and e.get("T") is not None]
+    weight = lambda e: sum(e["comfort_mask"])/4 if e.get("comfort_mask") is not None else 1.0
+    deficit = sum(max(0.0, comfort - e["T"])*weight(e) for e in day)
+    below = sum(60*weight(e) for e in day if e["T"] < comfort - 0.3)
     sps = [e.get("sp_t") for e in entries if e.get("sp_t") is not None]
     changes = sum(1 for a, b in zip(sps, sps[1:]) if abs(a - b) >= 0.25)
     err = [e["T"] - e["p6"] for e in entries if e.get("p6") is not None and e.get("T") is not None]

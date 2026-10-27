@@ -16,6 +16,10 @@ Learned from the heat pump's hours (setpoint, the thermostat's reading, heat per
 - hot water     share of each hour of the week spent on hot water (schedule, legionella), from the last weeks.
 
 A new response is only taken when it predicts the newest fifth of the windows better than the previous one.
+Since Roost steers, the newest days may show a unit that answers a setpoint step quite differently from the year of
+the thermostat's own steady schedule (a Tado on OpenTherm gave 1.6× the heat learned from that year, and the planner
+overheated the house). A second fit on the last RECENT_DAYS alone competes then: fitted without the newest RECENT_MIN
+windows and taken only when it predicts those clearly better (RECENT_MARGIN).
 """
 from __future__ import annotations
 
@@ -28,6 +32,9 @@ HEATING_DAY_KWH = 3.0       # only days the unit heated at all (heating off in s
 MAX_WINDOWS = 2500          # newest windows used (keeps the nightly run to a few seconds)
 T_OUT_MAX = 15.0            # above this the unit hardly heats: those hours say little about the response
 MARGIN = 0.02               # a new response must predict at least 2 % better
+RECENT_DAYS = 7             # the last days: what the unit does now that Roost steers
+RECENT_MIN = 24             # usable windows in those days before they count
+RECENT_MARGIN = 0.20        # the recent fit must predict the held-out windows at least 20 % better
 GRID = {
     "follow": (1.0, 0.7, 0.5, 0.35, 0.25, 0.15),
     "a": tuple(round(0.6 + 0.1 * i, 1) for i in range(9)),
@@ -41,9 +48,9 @@ def th_diff(rows: list[HourRow]) -> float | None:
     return round(xs[len(xs) // 2], 2) if len(xs) >= 48 else None
 
 
-def windows(rows: list[HourRow], house: HouseModel, hp: HeatPumpModel) -> list[tuple[float, list[tuple]]]:
+def windows(rows: list[HourRow], house: HouseModel, hp: HeatPumpModel) -> list[tuple[float, list[tuple], int]]:
     """Per window: (heat measured in the hour before, [(net loss, setpoint − thermostat reading, hot water share,
-    max output, measured heat) per hour]). Oldest first."""
+    max output, measured heat) per hour], start). Oldest first."""
     idx = {r.ts: r for r in rows}
     unf = unfollowed(rows, house, hp)
     per_day: dict[int, float] = {}
@@ -67,26 +74,28 @@ def windows(rows: list[HourRow], house: HouseModel, hp: HeatPumpModel) -> list[t
             loss = He * (r.T - r.T_out) - house.g * r.rad - house.internal_at(r.hour)
             reading = r.T_th if r.T_th is not None else r.T + hp.th_diff
             items.append((loss, r.sp - reading, min(1.0, r.dhw_s / 3600), hp.pmax(r.T_out), r.Q))
-        out.append((before.Q, items))
+        out.append((before.Q, items, t))
     return out[-MAX_WINDOWS:]
 
 
 TRIM = 0.1    # share of the worst windows left out of the error
 
 
-def window_error(wins, a: float, k: float, offset: float, follow: float) -> float | None:
-    """Root mean square error of the mean heat per window (kWh per hour)."""
+def window_error(wins, a: float, k: float, offset: float, follow: float, stops: bool = True) -> float | None:
+    """Root mean square error of the mean heat per window (kWh per hour). stops: no demand at all stops the unit
+    at once, as in the planner's simulator."""
     if not wins:
         return None
     aq = 1 - (1 - min(1.0, max(0.01, follow))) ** 0.25        # per quarter of an hour, as in the planner's simulator
     errs = []
-    for w, items in wins:
+    for w, items, _t in wins:
         tot = meas = 0.0
         for loss, err, dhw, pmax, q in items:
             d = a * loss + k * (err + offset)
+            stop = stops and d <= 0
             d = (0.0 if d < 0 else (pmax if d > pmax else d)) * (1.0 - dhw)
             for _ in range(4):
-                w += aq * (d - w)
+                w = 0.0 if stop else w + aq * (d - w)
                 tot += w * 0.25
             meas += q
         errs.append(((tot - meas) / WINDOW) ** 2)
@@ -169,6 +178,17 @@ def learn(rows: list[HourRow], house: HouseModel, previous: HeatPumpModel) -> tu
         notes.append("response: the default predicts better")
     else:
         notes.append("response kept")
+    # the last days on their own, fitted without the newest RECENT_MIN windows and judged on those: only a unit that
+    # answers differently now (not a week that happened to suit other values) gets through
+    held, rest = wins[-RECENT_MIN:], wins[:-RECENT_MIN]
+    recent = [w for w in rest if w[2] > rest[-1][2] - RECENT_DAYS * 86400] if rest else []
+    if len(recent) >= RECENT_MIN:
+        cur = _params(m, house.C)
+        rec = fit(recent, cur)
+        if window_error(held, **rec) < window_error(held, **cur) * (1 - RECENT_MARGIN):
+            m.a, m.k, m.offset, m.follow, m.resp_source = rec["a"], rec["k"], rec["offset"], rec["follow"], "learned"
+            notes[-1] = (f"response learned from the last {RECENT_DAYS} days: {m.a:g} × loss + {m.k:g} kW/°C towards "
+                         f"setpoint {m.offset:+.1f} °C, {round(m.follow * 100)} % of a change per hour")
     m.resp_hours = len(wins)
     m.resp_error = round(window_error(wins, **_params(m, house.C)), 3)
     return m, "; ".join(notes)

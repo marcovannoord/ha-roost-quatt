@@ -49,6 +49,8 @@ CONF_FIXED_EXPORT_PRICE = "fixed_export_price"  # optional: empty = net metering
 CONF_DAY_FROM = "day_from"
 CONF_DAY_TO = "day_to"
 CONF_COMFORT = "comfort"
+CONF_WEEKLY_COMFORT = "weekly_comfort"
+CONF_COMFORT_SCHEDULE = "comfort_schedule"
 CONF_DAY_MIN = "day_min"
 CONF_NIGHT_MIN = "night_min"
 CONF_STORE_MAX = "store_max"
@@ -63,6 +65,7 @@ CONF_BASELINE_NIGHT = "baseline_night"  # 0 = no night setback in the comparison
 CONF_GRID_PREFERENCE = "grid_preference"
 
 DEFAULTS = {
+    CONF_WEEKLY_COMFORT: False,
     CONF_DAY_FROM: 7, CONF_DAY_TO: 22, CONF_COMFORT: 20.5, CONF_DAY_MIN: 20.0, CONF_NIGHT_MIN: 19.0, CONF_STORE_MAX: 22.5, CONF_SP_MIN: 19.0,
     CONF_MAX_ABOVE: 1.0, CONF_MIN_INTERVAL: 60, CONF_PAUSE_HOURS: 2, CONF_BASELINE_NIGHT: 0, CONF_GRID_PREFERENCE: 0.0,
     CONF_GRID_SIGN: "import_positive", CONF_WEATHER_SOURCE: "open_meteo", CONF_BATTERY_RESERVE: 10, CONF_BATTERY_USE: "house", CONF_IMPORT_ON_SETUP: True,

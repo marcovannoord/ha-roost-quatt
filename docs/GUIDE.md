@@ -31,9 +31,11 @@ Roost.
 Your heat pump follows a thermostat. Normally that thermostat sits at one temperature, or follows a fixed schedule.
 Roost turns it into a **planner**:
 
-- Every 15 minutes it makes a **24-hour plan** of thermostat settings, on the electricity price per hour, the weather
-  forecast, your solar panels and home battery (if you have them) and **the heat your house can store** (a floor
-  holds a lot).
+- It makes a **24-hour plan** of thermostat settings, on the electricity price per hour, the weather forecast, your
+  solar panels and home battery (if you have them) and **the heat your house can store** (a floor holds a lot). The
+  plan **holds**: Roost makes it afresh only when something real changes — new prices, the room clearly off what the
+  plan expected, a clearly different weather or solar forecast, a change of yours — so the thermostat does not go up
+  and down with every small change.
 - When an hour is cheap and an expensive evening follows, it **charges the floor** a little; in the expensive hours the
   house **lives off that heat** while the heat pump does less.
 - It keeps the water **lukewarm** (the heat pump's efficiency, its COP, is best then), never lets the room get colder
@@ -173,6 +175,7 @@ Filled in from your thermostat's last days when Home Assistant still has them.
 | Field | Meaning |
 |---|---|
 | Comfort hours start / end | When you want the comfort temperature (e.g. 7 to 22) |
+| Weekly periods (optional) | Instead of one daily interval: comfort periods per weekday, on quarter hours, as `07:00-09:00, 17:30-22:00`; a period may run through midnight (`22:00-02:00` continues the next day). Off by default; when on, the comfort hours above are not used and the card's comfort-hour buttons are replaced by this form |
 | Comfort temperature | What you want in the comfort hours (Roost aims for this; it may go a little above while storing heat) |
 | Never below in the day | Hard minimum in the comfort hours |
 | Never below at night | Hard minimum outside them. Keep it within about 1.5 °C of the comfort temperature: a heat pump does badly with a deep night setback |
@@ -384,9 +387,10 @@ Back to shadow or off: `select.roost_mode` → *Shadow* / *Off*. In *Off* Roost 
   of 0.5 °C would look like 7 kW).
 - **Airing** needs nothing either. When the room falls fast — 0.5 °C within 15 minutes, which no house does by
   itself; 1 °C when the room temperature comes from a thermostat that shows half degrees, so its rounding is not taken
-  for a window — or a window sensor you chose opens, Roost recognises an open window: the card says *window open: Roost
-  waits*, Roost does not touch the thermostat (it would heat the outdoors), and it waits until the room is back (at
-  most three hours). Those hours are left out of what Roost learns from — the correction, the self-check, the heat
+  for a window — or a window sensor you chose opens, Roost recognises an open window. With a **window sensor** Roost
+  sets the thermostat to the lowest setpoint, so the heat pump stops heating the outdoors, and goes back to the plan
+  when the window closes. Recognised from the room alone (which can be a false alarm) the card says *window open:
+  Roost waits*: Roost does not touch the thermostat and waits until the room is back (at most three hours). Those hours are left out of what Roost learns from — the correction, the self-check, the heat
   pump's response and the house model — so airing never looks like a house that suddenly loses more heat. The look
   back marks it (**W** in the graph, and in the log).
 
@@ -540,6 +544,9 @@ automation:
 | The thermostat cannot be reached | The thermostat has been unavailable for 15 minutes or more while Roost steers; Roost leaves it alone meanwhile | Check the thermostat and its integration; the notice goes when it is back |
 | The thermostat cannot be changed | Changing the thermostat failed three times in a row | Check the thermostat's integration (the error is in the notice) |
 | Learning failed | The nightly learning hit an error; the previous model stays | Usually passes by itself; if it stays, report it (section [14](#14-reporting-a-problem)) |
+| Steering without a full plan | For three hours no electricity price, room temperature or weather forecast; Roost plans on one flat price, or follows the comfort schedule | Check the price, room and weather sensors |
+| The house stays below its minimum | The room has been well below its minimum for an hour while Roost steers | Check the heat pump and the thermostat |
+| The price sensor has no forecast | The price sensor gives only the current price and it changes every hour; Roost estimates the hours ahead from day-ahead prices, or plans on one flat price | Choose a sensor with at least 24 hours of prices, or the built-in day-ahead prices with your contract's formula |
 
 ---
 
@@ -606,9 +613,10 @@ setpoint over hours, so there is less to shift), about 5 % with a fixed price (h
 hours), 8–11 % with radiators or an on/off thermostat. Own solar and a home battery add to it. The card shows it against a steady thermostat that is as comfortable as Roost's
 plan.
 
-**Why does the expected saving change during the day?** Every 15 minutes Roost plans again with what it knows then.
-The plan changes when tomorrow's prices are published (in the afternoon), when the weather forecast changes, when the
-room is warmer or colder than expected, or simply because the 24 hours moved on an hour. The report and
+**Why does the expected saving change during the day?** Roost keeps the plan it made and works out every hour what
+it gives with what it knows then. The plan itself is made afresh when tomorrow's prices are published (in the
+afternoon), when the weather or solar forecast changes clearly, when the room is clearly warmer or colder than
+expected, or when you change something; and the 24 hours move on an hour. The report and
 `roost.explain_saving` list each change with the setting and expected saving before → after and why. Hours whose
 price is not published yet are filled in from the same hour a day earlier; Roost never changes the thermostat because
 of such an estimate: when only the estimates would make it do something else now, it plans as if those hours cost the

@@ -6,6 +6,7 @@ no passwords or tokens; the home location is left out.
 """
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from homeassistant.components.diagnostics import async_redact_data
@@ -19,6 +20,22 @@ from .quatt import QUATT
 from .manager import HOUR_LOG_KEPT, PLAN_LOG_KEPT
 
 REDACT = {"lat", "lon", "latitude", "longitude", "access_token", "refresh_token", "token"}
+# the location inside text as well: a weather URL in an error, a log line ("latitude=52.1&longitude=5.1")
+_LOC = re.compile(r"((?:lat|lon|latitude|longitude)=)-?\d+(?:\.\d+)?", re.IGNORECASE)
+
+
+def _scrub(v: Any, numbers: tuple[str, ...]) -> Any:
+    """Remove the home location from every text, however deep: query parameters and the coordinates themselves."""
+    if isinstance(v, str):
+        v = _LOC.sub(r"\1**REDACTED**", v)
+        for n in numbers:
+            v = v.replace(n, "**REDACTED**")
+        return v
+    if isinstance(v, dict):
+        return {k: _scrub(x, numbers) for k, x in v.items()}
+    if isinstance(v, (list, tuple)):
+        return [_scrub(x, numbers) for x in v]
+    return v
 
 
 def _state(hass: HomeAssistant, entity_id: str | None) -> dict | None:
@@ -60,11 +77,14 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: RoostCo
                    "rooms": {k: v.as_dict() for k, v in m.room_models.items()}, "building": m.building},
         "learning": m.learn_info, "import": m.import_info,
         "heating_curve": m.curve_advice.as_dict() if m.curve_advice else None, "quatt_info": m.quatt_info, "hybrid": m.hybrid, "check": m.check, "ready_to_steer": m.ready, "still_missing": m.ready_missing,
+        "held": {"commit": m.commit.as_dict() if m.commit else None, "why": m.plan_why, "fallback": m.fallback,
+                 "unpriced_kwh_today": m.unpriced_kwh},
         "plan": {"settings": vars(m.settings()), "control": vars(m.control_settings()),
                  "inputs": [vars(h) for h in m.plan_hours], "hours": [h.as_dict() for h in p.hours] if p else None,
                  "tariff": m.plan_tariff, "tariff_guessed": m.plan_guess,
                  "cost": p.cost if p else None, "steady_cost": p.baseline_cost if p else None, "rooms": m.room_status},
         "hour_log": m.hour_log[-HOUR_LOG_KEPT:], "plan_log": m.plan_log[-PLAN_LOG_KEPT:], "saving_days": m.saving_days, "day_stats": m.day_stats,
+        "day_contexts": m.day_contexts,
         "saving_explained": {"next_24h": m.next_breakdown(), "days": m.saving_detail}, "plan_changes": m.plan_changes,
         "thermostat_history": {str(k): v for k, v in sorted(m.sp_hist.items())[-72:]},
         "rooms": [vars(r) for r in m.rooms], "changes_by_hand": m.changes[-40:],
@@ -72,4 +92,9 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: RoostCo
         "events": list(m.events), "log": list(recent_log(hass).records),
         "pump_hours": len(m._pump_hours), "pump_hours_counted_live": sum(1 for v in m._pump_hours.values() if "heating_s_live" in v), "gas_boiler_hours": m.boiler_hours, "pv_k": m.pv_k, "load_profile": m.load_profile, "battery": m.battery.as_dict(),
     }
-    return async_redact_data(data, REDACT)
+    # the coordinates as Home Assistant has them, written out the ways a URL or message would (4+ decimals only: a
+    # short number like 52.1 also occurs as a temperature or a price)
+    numbers = tuple(sorted({f"{x:.{d}f}" for x in (hass.config.latitude, hass.config.longitude) if x
+                            for d in (4, 5, 6)} | {repr(x) for x in (hass.config.latitude, hass.config.longitude)
+                                                    if x and len(repr(x).split(".")[-1]) >= 4}, key=len, reverse=True))
+    return _scrub(async_redact_data(data, REDACT), numbers)

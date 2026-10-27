@@ -53,6 +53,7 @@ class EnergyValue:
     value: list[float]                            # currency per kWh per hour
     source: list[str]
     surplus_kwh: list[float] = field(default_factory=list)
+    fills_later: list[bool] = field(default_factory=list)   # solar the battery would store, but it fills anyway later
     battery_soc: list[float | None] = field(default_factory=list)
 
     def summary(self) -> dict:
@@ -111,6 +112,7 @@ def compute(inp: EnergyInputs) -> EnergyValue:
     netlist = [pv[k] - load[k] for k in range(n)]
     val: list[float] = []
     src: list[str] = []
+    later = [False] * n
     for h in range(n):
         surplus = max(0.0, pv[h] - load[h])
         if h == 0:
@@ -119,6 +121,7 @@ def compute(inp: EnergyInputs) -> EnergyValue:
             v, s = exp[h], SOURCE_SOLAR
         elif has_bat and surplus > 0 and _fills_later_today(full_at, spill, netlist, h):
             v, s = exp[h], SOURCE_SOLAR                       # the battery fills anyway: extra use only delays that
+            later[h] = True
         elif spill[h] > 0:
             f = min(1.0, spill[h])                            # part of the extra kWh is surplus, the rest grid
             v, s = f * exp[h] + (1 - f) * (imp[h] + inp.grid_preference), SOURCE_SOLAR
@@ -132,7 +135,7 @@ def compute(inp: EnergyInputs) -> EnergyValue:
             v, s = float(inp.predbat[h]), SOURCE_PREDBAT
         val.append(v)
         src.append(s)
-    return EnergyValue(val, src, spill, soc_path)
+    return EnergyValue(val, src, spill, fills_later=later, battery_soc=soc_path)
 
 
 def _fills_later_today(full_at: list[bool], spill: list[float], net: list[float], h: int) -> bool:
@@ -213,7 +216,7 @@ def planner_prices(inp: EnergyInputs, ev: EnergyValue) -> list[HourPrices]:
         own = ev.surplus_kwh[h] if h < len(ev.surplus_kwh) else 0.0
         if h == 0:
             own = max(own, inp.surplus_now_kw)
-        if ev.source[h] == SOURCE_SOLAR and own < 0.5:
+        if ev.source[h] == SOURCE_SOLAR and own < 0.5 and h < len(ev.fills_later) and ev.fills_later[h]:
             own = max(own, 1.0)                 # the battery fills anyway: solar going into it is free to use
         grid = ev.value[h] if ev.source[h] in (SOURCE_BATTERY, SOURCE_GRID, SOURCE_PREDBAT) else inp.import_price[h] + inp.grid_preference
         out.append(HourPrices(grid, exp[h], own, ev.source[h]))

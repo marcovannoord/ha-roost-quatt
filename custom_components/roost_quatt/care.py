@@ -17,6 +17,7 @@ NOTIFY_AGAIN_H = 12             # the same notification at most this often
 # Notifications in the user's language (Home Assistant's language; English when not one of these)
 TEXTS = {
     "en": {"title": "Roost",
+           "house_cold": "The room stays at {room} °C, below its minimum of {minimum} °C, while Roost steers. Check the heat pump and the thermostat.",
            "thermostat_unavailable": "The thermostat cannot be reached. Roost leaves it alone until it is back.",
            "set_failed": "Roost could not change the thermostat {n} times in a row: {error}",
            "steering_not_ready": "Roost steers with the model it had: the check of the house model did not pass. Look at it in the card.",
@@ -24,6 +25,7 @@ TEXTS = {
            "weekly": "Last week: heating {kwh} kWh, cost {cost}, saving {saving} against a steady thermostat. {below} min below comfort, {hand} changes by hand.{sources}",
            "sources": " Heating electricity: {sun} % own solar, {bat} % battery, {grid} % grid."},
     "nl": {"title": "Roost",
+           "house_cold": "De kamer blijft {room} °C, onder het minimum van {minimum} °C, terwijl Roost stuurt. Controleer warmtepomp en thermostaat.",
            "thermostat_unavailable": "De thermostaat is niet bereikbaar. Roost laat hem met rust tot hij terug is.",
            "set_failed": "Roost kon de thermostaat {n} keer achter elkaar niet wijzigen: {error}",
            "steering_not_ready": "Roost stuurt met het model dat het had: de controle van het huismodel is niet geslaagd. Kijk in de kaart.",
@@ -31,6 +33,7 @@ TEXTS = {
            "weekly": "Afgelopen week: {kwh} kWh stroom voor verwarming, kosten {cost}, besparing {saving} tegenover een vaste thermostaat. {below} min onder comfort, {hand} wijzigingen met de hand.{sources}",
            "sources": " Stroom voor verwarming: {sun} % eigen zon, {bat} % accu, {grid} % net."},
     "de": {"title": "Roost",
+           "house_cold": "Der Raum bleibt bei {room} °C, unter dem Minimum von {minimum} °C, während Roost steuert. Prüfe Wärmepumpe und Thermostat.",
            "thermostat_unavailable": "Das Thermostat ist nicht erreichbar. Roost lässt es in Ruhe, bis es zurück ist.",
            "set_failed": "Roost konnte das Thermostat {n}-mal nacheinander nicht ändern: {error}",
            "steering_not_ready": "Roost steuert mit dem bisherigen Modell: die Prüfung des Hausmodells ist nicht bestanden. Schau in die Karte.",
@@ -38,6 +41,7 @@ TEXTS = {
            "weekly": "Letzte Woche: {kwh} kWh Heizstrom, Kosten {cost}, Ersparnis {saving} gegenüber einem festen Thermostat. {below} min unter Komfort, {hand} Änderungen von Hand.{sources}",
            "sources": " Heizstrom: {sun} % eigene Sonne, {bat} % Akku, {grid} % Netz."},
     "fr": {"title": "Roost",
+           "house_cold": "La pièce reste à {room} °C, sous son minimum de {minimum} °C, alors que Roost pilote. Vérifiez la pompe à chaleur et le thermostat.",
            "thermostat_unavailable": "Le thermostat est injoignable. Roost le laisse tranquille jusqu'à son retour.",
            "set_failed": "Roost n'a pas pu changer le thermostat {n} fois de suite : {error}",
            "steering_not_ready": "Roost pilote avec le modèle qu'il avait : la vérification du modèle de la maison n'a pas réussi. Voir la carte.",
@@ -160,21 +164,37 @@ class CareMixin:
         below comfort, the lowest setpoint never above comfort); comfort hours must end after they start."""
         keys = {"comfort": CONF_COMFORT, "day_min": CONF_DAY_MIN, "night_min": CONF_NIGHT_MIN, "store_max": CONF_STORE_MAX,
                 "lowest_setpoint": CONF_SP_MIN, "day_from": CONF_DAY_FROM, "day_to": CONF_DAY_TO}
+        from homeassistant.exceptions import ServiceValidationError
         c = {k: self.conf.get(v) for k, v in keys.items()}
         new = {k: v for k, v in changes.items() if k in keys and v is not None}
+        weekly = {}
+        # the weekly comfort periods from the card: checked as in Configure > Comfort (quarter hours, no overlap)
+        if changes.get("comfort_schedule") is not None:
+            try:
+                weekly[schedule.WEEK] = schedule.normalise(changes["comfort_schedule"])
+            except ValueError as err:
+                raise ServiceValidationError(f"Weekly comfort periods: {err}") from err
+        if changes.get("weekly_comfort") is not None:
+            weekly[schedule.ENABLED] = bool(changes["weekly_comfort"])
+            if weekly[schedule.ENABLED] and schedule.WEEK not in weekly and not self.conf.get(schedule.WEEK):
+                # switched on without periods yet: every day the comfort hours it had
+                a, b = int(self.conf[CONF_DAY_FROM]) * 60, int(self.conf[CONF_DAY_TO]) * 60
+                weekly[schedule.WEEK] = schedule.normalise({d: [[a, b]] for d in schedule.DAYS})
+        enabled = weekly.get(schedule.ENABLED, self.conf.get(schedule.ENABLED))
+        if enabled and ({"day_from", "day_to"} & set(new)):
+            raise ServiceValidationError("The weekly comfort periods are on: change those instead of the comfort hours")
         for k, v in new.items():
             c[k] = int(v) if k in ("day_from", "day_to") else round(float(v) * 2) / 2
         f = comfort.adjust_settings(c, set(new))
         if f is None:
-            from homeassistant.exceptions import ServiceValidationError
             raise ServiceValidationError("The comfort hours must end after they start")
-        opts = {**self.entry.options, **{keys[k]: v for k, v in f.items()}}
+        opts = {**self.entry.options, **{keys[k]: v for k, v in f.items()}, **weekly}
         from . import _conf_key
         # settings Roost takes as they are: no reload for them. Known before saving: the update listener may run
         # within async_update_entry (an eager task), and then saw the old key and reloaded Roost (card unavailable)
         self.conf_key = _conf_key(self.entry, opts)
         self.hass.config_entries.async_update_entry(self.entry, options=opts)
-        self.event("settings", **{k: f[k] for k in new})
+        self.event("settings", **{k: f[k] for k in new}, **({"weekly": weekly.get(schedule.ENABLED, enabled)} if weekly else {}))
         await self._async_tick(None, force_plan=True)
 
     # ------------------------------------------------------------ where the heat pump's electricity came from

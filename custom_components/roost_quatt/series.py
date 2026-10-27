@@ -190,6 +190,16 @@ def _hour_floor(ts: float) -> float:
     return ts - (ts % 3600)
 
 
+def published_prefix(values: list[float | None]) -> list[float]:
+    """Only contiguous known prices from now. Never bridge a gap with a historical or last price."""
+    out = []
+    for v in values:
+        if v is None or not math.isfinite(v):
+            break
+        out.append(v)
+    return out
+
+
 def slots_from_changes(changes: list[tuple[float, float]], end_ts: float) -> list[Slot]:
     """Slots from state changes (epoch s, value), each valid until the next change (the last one until end_ts)."""
     ch = sorted(changes)
@@ -252,3 +262,44 @@ def local_midnight(now: datetime) -> float:
     """Midnight of the local day of `now` (aware datetime), as epoch seconds."""
     loc = now.astimezone()
     return (loc - timedelta(hours=loc.hour, minutes=loc.minute, seconds=loc.second, microseconds=loc.microsecond)).timestamp()
+
+
+FLAT_EPS = 0.002        # currency per kWh: prices this close are the same price
+TOU_LEVELS = 3          # a contract with at most this many rates by the hour of day (normal / low)
+FIT_MIN_HOURS = 12      # hours of a sensor's history beside day-ahead prices before Roost estimates from them
+FIT_MIN_R2 = 0.7        # how closely the sensor must follow the day-ahead price (share of its variation explained)
+
+
+def classify_history(hist: dict[int, float], local_hour) -> str:
+    """What a price sensor without a forecast is, from its hourly history: "flat" (one price), "tou" (a fixed rate per
+    hour of the day: normal/low), "dynamic" (changes from hour to hour, a day-ahead contract) or "unknown" (too little
+    history)."""
+    vals = [v for _, v in sorted(hist.items())[-48:]]
+    if len(vals) < FIT_MIN_HOURS:
+        return "unknown"
+    if max(vals) - min(vals) < FLAT_EPS:
+        return "flat"
+    by_hour: dict[int, list[float]] = {}
+    for ts, v in sorted(hist.items())[-48:]:
+        by_hour.setdefault(local_hour(ts), []).append(v)
+    levels = sorted({round(v / FLAT_EPS) for v in vals})
+    if all(max(x) - min(x) < FLAT_EPS for x in by_hour.values()) and len(levels) <= TOU_LEVELS:
+        return "tou"
+    return "dynamic"
+
+
+def fit_line(pairs: list[tuple[float, float]]) -> tuple[float, float, float] | None:
+    """Least squares y = a·x + b over (x, y) pairs -> (a, b, r²), None with too few pairs or no variation."""
+    n = len(pairs)
+    if n < FIT_MIN_HOURS:
+        return None
+    mx = sum(x for x, _ in pairs) / n
+    my = sum(y for _, y in pairs) / n
+    sxx = sum((x - mx) ** 2 for x, _ in pairs)
+    syy = sum((y - my) ** 2 for _, y in pairs)
+    if sxx <= 1e-12 or syy <= 1e-12:
+        return None
+    sxy = sum((x - mx) * (y - my) for x, y in pairs)
+    a = sxy / sxx
+    b = my - a * mx
+    return a, b, sxy * sxy / (sxx * syy)

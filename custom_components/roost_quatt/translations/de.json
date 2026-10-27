@@ -127,12 +127,13 @@
           "day_from": "Beginn der Komfortstunden",
           "day_to": "Ende der Komfortstunden",
           "comfort": "Komforttemperatur (Tag)",
-          "day_min": "Tagsüber nie darunter",
-          "night_min": "Nachts nie darunter",
+          "day_min": "Minimum in Komfortzeiten",
+          "night_min": "Minimum außerhalb der Komfortzeiten",
           "store_max": "Am wärmsten beim Wärmespeichern"
         },
         "data_description": {
-          "store_max": "Roost speichert Wärme im Boden (oder im Haus), wenn eine Stunde günstig ist (oder Solar wenig einbringt) und eine teure folgt. Auf die Komforttemperatur setzen, um das auszuschalten."
+          "store_max": "Roost speichert Wärme im Boden (oder im Haus), wenn eine Stunde günstig ist (oder Solar wenig einbringt) und eine teure folgt. Auf die Komforttemperatur setzen, um das auszuschalten.",
+          "day_from": "Täglicher Standard (bei ausgeschaltetem Wochenplan)"
         },
         "sections": {
           "advanced": {
@@ -153,6 +154,20 @@
               "baseline_night": "Die Ersparnis wird gegenüber einem konstanten Thermostat auf Komforttemperatur gezeigt, der üblichen Empfehlung für Wärmepumpen.",
               "weather_source": "Open-Meteo braucht kein Konto und liefert Strahlung und Wind (das Hausmodell nutzt beides)."
             }
+          },
+          "weekly_schedule": {
+            "name": "Komfortzeiten je Wochentag",
+            "description": "Diese Zeiten ersetzen bei Aktivierung die tägliche Start- und Endzeit oben. Viertelstunden verwenden, z. B. 07:00-09:00, 17:00-22:00. Ein leerer Tag bedeutet nur Mindesttemperatur. 22:00-02:00 reicht in den nächsten Tag. Roost plant das Vorheizen vor dem Komfortzeitraum.",
+            "data": {
+              "enabled": "Wochenplan verwenden",
+              "monday": "Montag",
+              "tuesday": "Dienstag",
+              "wednesday": "Mittwoch",
+              "thursday": "Donnerstag",
+              "friday": "Freitag",
+              "saturday": "Samstag",
+              "sunday": "Sonntag"
+            }
           }
         }
       }
@@ -164,7 +179,8 @@
       "day_order": "Die Komfortstunden müssen nach ihrem Beginn enden.",
       "weather_needed": "Wähle eine Wetter-Entität (unter Erweitert).",
       "lowest_above_comfort": "Die niedrigste Thermostateinstellung darf nicht über der Komforttemperatur liegen.",
-      "price_needed": "Wähle einen Preissensor oder einen Festpreis."
+      "price_needed": "Wähle einen Preissensor oder einen Festpreis.",
+      "invalid_schedule": "Wochenzeiten prüfen: HH:MM-HH:MM, durch Kommas getrennt, in 15-Minuten-Schritten. Zeiträume dürfen sich auch über Mitternacht nicht überschneiden."
     },
     "abort": {
       "already_configured": "Diese Wärmepumpe ist bereits eingerichtet."
@@ -268,12 +284,13 @@
           "day_from": "Beginn der Komfortstunden",
           "day_to": "Ende der Komfortstunden",
           "comfort": "Komforttemperatur (Tag)",
-          "day_min": "Tagsüber nie darunter",
-          "night_min": "Nachts nie darunter",
+          "day_min": "Minimum in Komfortzeiten",
+          "night_min": "Minimum außerhalb der Komfortzeiten",
           "store_max": "Am wärmsten beim Wärmespeichern"
         },
         "data_description": {
-          "store_max": "Roost speichert Wärme im Boden (oder im Haus), wenn eine Stunde günstig ist (oder Solar wenig einbringt) und eine teure folgt. Auf die Komforttemperatur setzen, um das auszuschalten."
+          "store_max": "Roost speichert Wärme im Boden (oder im Haus), wenn eine Stunde günstig ist (oder Solar wenig einbringt) und eine teure folgt. Auf die Komforttemperatur setzen, um das auszuschalten.",
+          "day_from": "Täglicher Standard (bei ausgeschaltetem Wochenplan)"
         },
         "sections": {
           "advanced": {
@@ -293,6 +310,20 @@
               "max_above_room": "Hält ein OpenTherm-Thermostat bei lauwarmem Wasser (hoher COP).",
               "baseline_night": "Die Ersparnis wird gegenüber einem konstanten Thermostat auf Komforttemperatur gezeigt, der üblichen Empfehlung für Wärmepumpen.",
               "weather_source": "Open-Meteo braucht kein Konto und liefert Strahlung und Wind (das Hausmodell nutzt beides)."
+            }
+          },
+          "weekly_schedule": {
+            "name": "Komfortzeiten je Wochentag",
+            "description": "Diese Zeiten ersetzen bei Aktivierung die tägliche Start- und Endzeit oben. Viertelstunden verwenden, z. B. 07:00-09:00, 17:00-22:00. Ein leerer Tag bedeutet nur Mindesttemperatur. 22:00-02:00 reicht in den nächsten Tag. Roost plant das Vorheizen vor dem Komfortzeitraum.",
+            "data": {
+              "enabled": "Wochenplan verwenden",
+              "monday": "Montag",
+              "tuesday": "Dienstag",
+              "wednesday": "Mittwoch",
+              "thursday": "Donnerstag",
+              "friday": "Freitag",
+              "saturday": "Samstag",
+              "sunday": "Sonntag"
             }
           }
         }
@@ -363,7 +394,8 @@
       "day_order": "Die Komfortstunden müssen nach ihrem Beginn enden.",
       "weather_needed": "Wähle eine Wetter-Entität (unter Erweitert).",
       "lowest_above_comfort": "Die niedrigste Thermostateinstellung darf nicht über der Komforttemperatur liegen.",
-      "price_needed": "Wähle einen Preissensor oder einen Festpreis."
+      "price_needed": "Wähle einen Preissensor oder einen Festpreis.",
+      "invalid_schedule": "Wochenzeiten prüfen: HH:MM-HH:MM, durch Kommas getrennt, in 15-Minuten-Schritten. Zeiträume dürfen sich auch über Mitternacht nicht überschneiden."
     },
     "abort": {
       "mode_set": "Der Modus ist eingestellt."
@@ -656,6 +688,22 @@
           }
         }
       }
+    },
+    "fallback": {
+      "title": "{name}: Steuerung ohne vollständigen Plan",
+      "description": "Roost kann seit einigen Stunden keinen vollständigen Plan erstellen (kein Strompreis, keine Raumtemperatur oder Wettervorhersage). Bis dahin steuert es mit einem Ersatz: ohne Preis mit einem festen Preis, sonst Komforttemperatur in den Komfortstunden und Nachtminimum außerhalb. Prüfe die Preis-, Raum- und Wettersensoren in den Einstellungen von Roost; der Hinweis verschwindet, sobald wieder ein vollständiger Plan möglich ist."
+    },
+    "house_cold": {
+      "title": "{name}: das Haus bleibt unter dem Minimum",
+      "description": "Roost steuert das Thermostat, aber der Raum hat seit einer Stunde {room} °C, deutlich unter dem Minimum von {minimum} °C. Vielleicht kommt die Wärmepumpe nicht nach, das Thermostat gibt den Sollwert nicht weiter oder das Hausmodell liegt weit daneben. Prüfe Wärmepumpe und Thermostat; Roost korrigiert weiter."
+    },
+    "price_no_forecast_estimated": {
+      "title": "{name}: der Preissensor hat keine Vorhersage",
+      "description": "{entity} liefert nur den aktuellen Preis, und der ändert sich jede Stunde (ein dynamischer Tarif). Roost schätzt die kommenden Stunden aus den Day-Ahead-Preisen, so wie dieser Sensor ihnen folgte. Ein Sensor mit Preisen für mindestens die nächsten 24 Stunden in den Attributen oder die eingebauten Day-Ahead-Preise mit der Formel deines Tarifs plant genauer."
+    },
+    "price_no_forecast_flat": {
+      "title": "{name}: der Preissensor hat keine Vorhersage",
+      "description": "{entity} liefert nur den aktuellen Preis, und der ändert sich von Stunde zu Stunde. Roost kann daraus die kommenden Stunden (noch) nicht ableiten und plant mit einem festen Preis: es verschiebt das Heizen nicht in günstigere Stunden. Wähle einen Sensor mit Preisen für mindestens die nächsten 24 Stunden in den Attributen oder die eingebauten Day-Ahead-Preise mit der Formel deines Tarifs."
     }
   },
   "services": {
@@ -717,6 +765,13 @@
         },
         "day_to": {
           "name": "Komfortstunden bis"
+        },
+        "weekly_comfort": {
+          "name": "Komfortzeiten je Wochentag an"
+        },
+        "comfort_schedule": {
+          "name": "Komfortzeiten je Wochentag",
+          "description": "Je Wochentag eine Liste von Zeiträumen, als \"07:00-09:00, 17:30-22:00\" oder [[420, 540]] in Minuten; Viertelstunden, ein Zeitraum darf über Mitternacht gehen."
         }
       }
     },

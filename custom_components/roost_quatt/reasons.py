@@ -15,6 +15,9 @@ EN = {
     "no_weather": "no weather forecast and no outdoor temperature",
     "no_plan": "no plan",
     "off": "Roost is off",
+    "airing": "window open: thermostat at its lowest until it closes",
+    "fallback_no_price": "no price: planned on one flat price",
+    "fallback_schedule": "no full plan: comfort schedule",
     # planner: the first hour
     "store_solar": "charging the floor on own solar (up to {sp:g} °C)",
     "store_cheap": "charging the floor now ({ct:.0f} ct) before more expensive hours",
@@ -32,6 +35,8 @@ EN = {
     "wait": "next change allowed in {min:.0f} min",
     "urgent": "room below the minimum: correcting now",
     "following": "following the plan",
+    "min_run": "the heat pump just started: lowering in {min:.0f} min",
+    "set_failed": "could not set the thermostat: trying again in {min:.0f} min",
 }
 
 
