@@ -4,3 +4,4 @@ __pycache__/
 
 # home-specific tools (hosts, entity ids): not for the public repo
 tools/local/
+.venv/

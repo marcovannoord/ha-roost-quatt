@@ -1,0 +1,742 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Roost voor Quatt",
+        "description": "Roost plant de thermostaat van je Quatt-warmtepomp 24 uur vooruit op prijs, weer en de warmte die je huis opslaat. Hij begint in meekijkmodus: hij laat alleen zien wat hij zou doen. Gevonden entiteiten zijn al ingevuld; controleer ze. Geen login nodig: Roost leest de sensoren van de Quatt-integratie.",
+        "data": {
+          "name": "Naam",
+          "heat_pump": "Quatt CIC",
+          "thermostat": "Thermostaat die de warmtepomp aanstuurt",
+          "import_history": "Historie van de warmtepomp nu importeren"
+        },
+        "data_description": {
+          "heat_pump": "Een apparaat van de Quatt-integratie (home-assistant-quatt), bijvoorbeeld de CIC. De sensoren worden automatisch gevonden.",
+          "thermostat": "Roost wijzigt alleen de gewenste temperatuur van deze thermostaat, zoals jij dat zou doen. Hij moet via OpenTherm op de Quatt CIC zijn aangesloten.",
+          "import_history": "Uit de eigen langetermijnstatistieken van Home Assistant van de Quatt-sensoren (warmte, stroom, temperaturen): tot een jaar aan uren, zodat Roost je huis en warmtepomp vanaf dag één kent. Duurt seconden; er gaat niets buiten Home Assistant."
+        }
+      },
+      "house": {
+        "title": "Het huis",
+        "description": "Een losse kamersensor is beter dan de meting van de thermostaat zelf.",
+        "data": {
+          "room_temperature": "Kamertemperatuursensor (optioneel, beter dan die van de thermostaat)",
+          "emitter": "Warmte-afgifte",
+          "use_bag": "Gebouwgegevens uit de BAG (Kadaster)",
+          "window_sensors": "Raam- en deursensoren (optioneel)"
+        },
+        "data_description": {
+          "emitter": "Vloerverwarming houdt veel warmte vast en geeft die langzaam af; radiatoren reageren in minuten en dan is het huis zelf de buffer. Alleen de startwaarden: Roost leert je huis uit de data.",
+          "use_bag": "Alleen Nederland. Stuurt de thuislocatie van Home Assistant één keer naar PDOK (Kadaster) om bouwjaar, woonoppervlak en buitenmuren van je huis op te zoeken: betere startwaarden en alleen de gevelrichtingen die je huis heeft. Roost bewaart geen adres. Uitzetten wist de gegevens.",
+          "window_sensors": "Roost herkent luchten ook aan een snelle daling van de kamertemperatuur; met sensoren weet hij het meteen. Zolang een raam open is wacht Roost en leert hij er niet van."
+        }
+      },
+      "price": {
+        "title": "Stroomprijs",
+        "description": "Een dynamisch contract: kies de sensor met de prijzen van de komende uren — of, zonder zo'n sensor, 'day-ahead-prijzen ingebouwd' en vul in de volgende stap de formule van je leverancier in. Een vast contract: kies 'Vaste prijs'.",
+        "data": {
+          "price_mode": "Stroomprijs",
+          "import_price": "Stroomprijssensor (met verwachting)",
+          "export_price": "Terugleverprijs"
+        },
+        "data_description": {
+          "price_mode": "Dynamisch: een sensor met uurprijzen. Vast: je vult in de volgende stap het tarief van je contract in (en een daltarief als je dat hebt).",
+          "import_price": "Alleen bij een dynamische prijs. Een sensor met prijzen voor de komende uren in de attributen (Nord Pool, ENTSO-e, Frank Energie, Zonneplan, Tibber, evcc, …) — bij Zonneplan 'Huidig elektriciteitstarief'. Losse sensors per uur vooruit werken niet; kies dan de ingebouwde day-ahead-prijzen.",
+          "export_price": "Leeg laten bij salderen: teruglevering is dan de afnameprijs waard."
+        }
+      },
+      "price_epex": {
+        "title": "Day-ahead-prijzen (ingebouwd)",
+        "description": "Roost haalt de day-ahead-prijzen (EPEX) zelf op, per kwartier, bij Energy-Charts — geen sensor nodig. Wat een kWh kost = day-ahead × vermenigvuldiger + vast bedrag; hetzelfde voor teruglevering als die een eigen prijs heeft.",
+        "data": {
+          "epex_zone": "Prijszone",
+          "import_mult": "Vermenigvuldiger",
+          "import_add": "Vast bedrag per kWh",
+          "export_formula": "Teruglevering heeft een eigen prijs (geen saldering)",
+          "export_mult": "Teruglevering: vermenigvuldiger",
+          "export_add": "Teruglevering: vast bedrag per kWh"
+        },
+        "data_description": {
+          "epex_zone": "De day-ahead-markt van je land (bijvoorbeeld NL, BE, DE-LU); ingevuld uit het land van je Home Assistant.",
+          "import_mult": "Meestal 1 + btw, bijvoorbeeld 1,21 in Nederland.",
+          "import_add": "De inkoopvergoeding van je leverancier plus de energiebelasting, inclusief btw. Voorbeeld NL: (inkoopvergoeding + energiebelasting) × 1,21.",
+          "export_formula": "Uit: saldering — teruglevering is evenveel waard als inkoop. Aan: de formule hieronder.",
+          "export_mult": "Vaak 1 (geen btw of belasting op teruglevering zonder saldering).",
+          "export_add": "De terugleververgoeding van je leverancier, negatief als het je kost, bijvoorbeeld -0,02."
+        }
+      },
+      "price_fixed": {
+        "title": "Vaste prijs",
+        "description": "Zoals op je rekening, alles inbegrepen.",
+        "data": {
+          "fixed_price": "Prijs per kWh (normaal tarief)",
+          "fixed_low_price": "Daltarief per kWh (optioneel)",
+          "low_from": "Daltarief vanaf",
+          "low_to": "Daltarief tot",
+          "low_weekend": "Hele weekend daltarief",
+          "fixed_export_price": "Terugleverprijs per kWh (optioneel)"
+        },
+        "data_description": {
+          "fixed_price": "Alles inbegrepen: energie, belastingen en btw, zoals op je rekening.",
+          "fixed_low_price": "Leeg laten bij een enkel tarief.",
+          "low_weekend": "Bij veel dubbele meters telt het hele weekend als dal.",
+          "fixed_export_price": "Leeg laten bij salderen: teruglevering is dan de afnameprijs waard."
+        }
+      },
+      "solar": {
+        "title": "Zon en thuisaccu",
+        "description": "Vink aan wat je huis heeft; alleen die velden volgen. Zonder beide sla je dit over.",
+        "data": {
+          "has_solar": "Ik heb zonnepanelen",
+          "has_battery": "Ik heb een thuisaccu"
+        },
+        "data_description": {
+          "has_solar": "Roost rekent eigen zonnestroom dan tegen wat terugleveren zou opbrengen.",
+          "has_battery": "Roost rekent stroom uit de accu dan tegen wat bijvullen kost."
+        }
+      },
+      "solar_details": {
+        "title": "Zon en thuisaccu",
+        "description": "Gevonden entiteiten zijn ingevuld; controleer ze. Alle velden zijn optioneel.",
+        "data": {
+          "pv_power": "Zonnevermogen",
+          "pv_forecast": "Zonverwachting vandaag",
+          "pv_forecast_tomorrow": "Zonverwachting morgen",
+          "grid_power": "Netvermogen",
+          "grid_sign": "Teken van het netvermogen",
+          "battery_soc": "Laadtoestand thuisaccu",
+          "battery_power": "Vermogen thuisaccu (+ = ontladen)",
+          "battery_kwh": "Bruikbare accucapaciteit",
+          "battery_kw": "Maximaal laadvermogen accu",
+          "battery_reserve": "Accureserve",
+          "battery_use": "De warmtepomp en de thuisaccu",
+          "house_power": "Huisvermogen (voor het verbruiksprofiel)",
+          "grid_preference": "Voorkeur voor eigen energie (bovenop elke kWh uit het net)"
+        },
+        "data_description": {
+          "grid_power": "Allemaal optioneel. Met zonnepanelen ziet Roost echt zon-overschot (teruglevering min accu-ontladen, hooguit het zonnevermogen).",
+          "battery_power": "Nodig om zonneteruglevering te onderscheiden van een accu die aan het net verkoopt.",
+          "battery_use": "Bewaren voor het huis: stroom die de warmtepomp uit de accu haalt kost wat het huis later mist (het uur waarin de accu leeg zou raken), dus Roost stookt in neturen en laat de accu aan het huis. Gebruiken als dat goedkoper is: als de accu ook uit het net laadt (dat leert Roost), kost stroom eruit het goedkoopste laaduur dat nog komt — voor een accu met een sturing die vooruit plant en ruimte heeft (Predbat en dergelijke).",
+          "house_power": "Optioneel. Wat het hele huis verbruikt, om het verbruik per uur van de dag te leren (welke komende uren zon over hebben, hoe lang de accu het houdt). Leeg gelaten rekent Roost het uit netvermogen + zonnevermogen (+ accuvermogen)."
+        }
+      },
+      "comfort": {
+        "title": "Comfort",
+        "description": "Roost houdt de kamer in de comforturen op de comforttemperatuur en laat hem nooit kouder worden dan de minimums. Waar mogelijk ingevuld uit de laatste weken van je thermostaat.",
+        "data": {
+          "day_from": "Comforturen beginnen om",
+          "day_to": "Comforturen eindigen om",
+          "comfort": "Comforttemperatuur (overdag)",
+          "day_min": "Overdag nooit kouder dan",
+          "night_min": "'s Nachts nooit kouder dan",
+          "store_max": "Hoogstens zo warm bij warmte opslaan"
+        },
+        "data_description": {
+          "store_max": "Roost slaat warmte op in de vloer (of het huis) als een uur goedkoop is (of zonnestroom weinig opbrengt) en er een duur uur volgt. Gelijk aan de comforttemperatuur zetten schakelt dat uit."
+        },
+        "sections": {
+          "advanced": {
+            "name": "Geavanceerd: regeling en weer",
+            "description": "De standaardwaarden passen bij de meeste huizen.",
+            "data": {
+              "lowest_setpoint": "Laagste thermostaatstand",
+              "max_above_room": "Setpoint hoogstens zoveel boven de kamer",
+              "min_interval": "Hoogstens één wijziging per",
+              "pause_hours": "Pauze na een handmatige wijziging",
+              "baseline_night": "Nachtverlaging van de vergelijkingsthermostaat (0 = geen)",
+              "weather_source": "Weersverwachting",
+              "weather_entity": "Weerentiteit"
+            },
+            "data_description": {
+              "lowest_setpoint": "Roost zet de thermostaat nooit lager. Lager laat een trage warmtepomp sneller stoppen, maar als Home Assistant uitvalt blijft de thermostaat staan waar Roost hem liet.",
+              "max_above_room": "Zo blijft een OpenTherm-thermostaat om lauw water vragen (hoge COP).",
+              "baseline_night": "De besparing wordt getoond tegenover een vaste thermostaat op de comforttemperatuur, het gebruikelijke advies bij warmtepompen.",
+              "weather_source": "Open-Meteo heeft geen account nodig en geeft straling en wind (het huismodel gebruikt beide)."
+            }
+          }
+        }
+      }
+    },
+    "error": {
+      "not_quatt": "Dit apparaat heeft geen Quatt-warmtepompsensoren (de stand van de CIC, warmtevermogen en opgenomen vermogen).",
+      "comfort_below_min": "De comforttemperatuur moet minstens het dagminimum zijn.",
+      "store_below_comfort": "Warmte opslaan moet minstens de comforttemperatuur toestaan.",
+      "day_order": "De comforturen moeten eindigen na het begin.",
+      "weather_needed": "Kies een weerentiteit (onder Geavanceerd).",
+      "lowest_above_comfort": "De laagste thermostaatstand mag niet boven de comforttemperatuur liggen.",
+      "price_needed": "Kies een prijssensor, of kies een vaste prijs."
+    },
+    "abort": {
+      "already_configured": "Deze warmtepomp is al ingesteld."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Roost",
+        "description": "{saved}**Huis:** {house}\n**Stroomprijs:** {price}\n**Zon en accu:** {solar}\n**Comfort:** {comfort}\n**Extra kamers:** {rooms} (toevoegen op de integratiepagina)\n\nElk onderdeel slaat op als je het verstuurt en komt hier terug; *Klaar* sluit.",
+        "menu_options": {
+          "mode": "Modus: meekijken of sturen",
+          "house": "Huis en thermostaat",
+          "price": "Stroomprijs",
+          "solar": "Zon en thuisaccu",
+          "comfort": "Comfort",
+          "notify": "Meldingen",
+          "done": "Klaar"
+        }
+      },
+      "mode": {
+        "title": "Modus",
+        "description": "**Klaar om te sturen: {verdict}**\nVerwacht: {eta}\nGecontroleerd op: {basis}\n\n{plan_ok} Planfout 6 uur vooruit: {plan_error} °C (nodig: 0,5 of minder)\n{hours_ok} Stookuren in de gecontroleerde week: {hours} (nodig: 30)\n{heat_ok} Warmte voorspeld ÷ gemeten: {heat} (nodig: 0,7–1,3)\n{follows} De warmtepomp volgt de thermostaat\n{lever} Het setpoint stuurt de warmtepomp\n\nDe zelfcontrole draait elke nacht om 03:30. **Meekijken**: Roost plant en laat zien, raakt de thermostaat niet aan. **Actief**: Roost stuurt de thermostaat. **Uit**: niets.",
+        "data": {
+          "mode": "Modus"
+        }
+      },
+      "house": {
+        "title": "Het huis",
+        "description": "Een losse kamersensor is beter dan de meting van de thermostaat zelf.",
+        "data": {
+          "thermostat": "Thermostaat die de warmtepomp aanstuurt",
+          "room_temperature": "Kamertemperatuursensor (optioneel, beter dan die van de thermostaat)",
+          "emitter": "Warmte-afgifte",
+          "use_bag": "Gebouwgegevens uit de BAG (Kadaster)",
+          "window_sensors": "Raam- en deursensoren (optioneel)"
+        },
+        "data_description": {
+          "thermostat": "Roost verandert alleen de ingestelde temperatuur van deze thermostaat, zoals jij dat ook doet. De warmtepomp moet de thermostaat volgen (niet zijn eigen stooklijn).",
+          "emitter": "Vloerverwarming houdt veel warmte vast en geeft die langzaam af; radiatoren reageren in minuten en dan is het huis zelf de buffer. Alleen de startwaarden: Roost leert je huis uit de data.",
+          "use_bag": "Alleen Nederland. Stuurt de thuislocatie van Home Assistant één keer naar PDOK (Kadaster) om bouwjaar, woonoppervlak en buitenmuren van je huis op te zoeken: betere startwaarden en alleen de gevelrichtingen die je huis heeft. Roost bewaart geen adres. Uitzetten wist de gegevens.",
+          "window_sensors": "Roost herkent luchten ook aan een snelle daling van de kamertemperatuur; met sensoren weet hij het meteen. Zolang een raam open is wacht Roost en leert hij er niet van."
+        }
+      },
+      "price": {
+        "title": "Stroomprijs",
+        "description": "Een dynamisch contract: kies de sensor met de prijzen van de komende uren — of, zonder zo'n sensor, 'day-ahead-prijzen ingebouwd' en vul in de volgende stap de formule van je leverancier in. Een vast contract: kies 'Vaste prijs'.",
+        "data": {
+          "price_mode": "Stroomprijs",
+          "import_price": "Stroomprijssensor (met verwachting)",
+          "export_price": "Terugleverprijs"
+        },
+        "data_description": {
+          "price_mode": "Dynamisch: een sensor met uurprijzen. Vast: je vult in de volgende stap het tarief van je contract in (en een daltarief als je dat hebt).",
+          "import_price": "Alleen bij een dynamische prijs. Een sensor met prijzen voor de komende uren in de attributen (Nord Pool, ENTSO-e, Frank Energie, Zonneplan, Tibber, evcc, …) — bij Zonneplan 'Huidig elektriciteitstarief'. Losse sensors per uur vooruit werken niet; kies dan de ingebouwde day-ahead-prijzen.",
+          "export_price": "Leeg laten bij salderen: teruglevering is dan de afnameprijs waard."
+        }
+      },
+      "price_fixed": {
+        "title": "Vaste prijs",
+        "description": "Zoals op je rekening, alles inbegrepen.",
+        "data": {
+          "fixed_price": "Prijs per kWh (normaal tarief)",
+          "fixed_low_price": "Daltarief per kWh (optioneel)",
+          "low_from": "Daltarief vanaf",
+          "low_to": "Daltarief tot",
+          "low_weekend": "Hele weekend daltarief",
+          "fixed_export_price": "Terugleverprijs per kWh (optioneel)"
+        },
+        "data_description": {
+          "fixed_price": "Alles inbegrepen: energie, belastingen en btw, zoals op je rekening.",
+          "fixed_low_price": "Leeg laten bij een enkel tarief.",
+          "low_weekend": "Bij veel dubbele meters telt het hele weekend als dal.",
+          "fixed_export_price": "Leeg laten bij salderen: teruglevering is dan de afnameprijs waard."
+        }
+      },
+      "price_epex": {
+        "title": "Day-ahead-prijzen (ingebouwd)",
+        "description": "Roost haalt de day-ahead-prijzen (EPEX) zelf op, per kwartier, bij Energy-Charts — geen sensor nodig. Wat een kWh kost = day-ahead × vermenigvuldiger + vast bedrag; hetzelfde voor teruglevering als die een eigen prijs heeft.",
+        "data": {
+          "epex_zone": "Prijszone",
+          "import_mult": "Vermenigvuldiger",
+          "import_add": "Vast bedrag per kWh",
+          "export_formula": "Teruglevering heeft een eigen prijs (geen saldering)",
+          "export_mult": "Teruglevering: vermenigvuldiger",
+          "export_add": "Teruglevering: vast bedrag per kWh"
+        },
+        "data_description": {
+          "epex_zone": "De day-ahead-markt van je land (bijvoorbeeld NL, BE, DE-LU); ingevuld uit het land van je Home Assistant.",
+          "import_mult": "Meestal 1 + btw, bijvoorbeeld 1,21 in Nederland.",
+          "import_add": "De inkoopvergoeding van je leverancier plus de energiebelasting, inclusief btw. Voorbeeld NL: (inkoopvergoeding + energiebelasting) × 1,21.",
+          "export_formula": "Uit: saldering — teruglevering is evenveel waard als inkoop. Aan: de formule hieronder.",
+          "export_mult": "Vaak 1 (geen btw of belasting op teruglevering zonder saldering).",
+          "export_add": "De terugleververgoeding van je leverancier, negatief als het je kost, bijvoorbeeld -0,02."
+        }
+      },
+      "comfort": {
+        "title": "Comfort",
+        "description": "Roost houdt de kamer in de comforturen op de comforttemperatuur en laat hem nooit kouder worden dan de minimums. Waar mogelijk ingevuld uit de laatste weken van je thermostaat.",
+        "data": {
+          "day_from": "Comforturen beginnen om",
+          "day_to": "Comforturen eindigen om",
+          "comfort": "Comforttemperatuur (overdag)",
+          "day_min": "Overdag nooit kouder dan",
+          "night_min": "'s Nachts nooit kouder dan",
+          "store_max": "Hoogstens zo warm bij warmte opslaan"
+        },
+        "data_description": {
+          "store_max": "Roost slaat warmte op in de vloer (of het huis) als een uur goedkoop is (of zonnestroom weinig opbrengt) en er een duur uur volgt. Gelijk aan de comforttemperatuur zetten schakelt dat uit."
+        },
+        "sections": {
+          "advanced": {
+            "name": "Geavanceerd: regeling en weer",
+            "description": "De standaardwaarden passen bij de meeste huizen.",
+            "data": {
+              "lowest_setpoint": "Laagste thermostaatstand",
+              "max_above_room": "Setpoint hoogstens zoveel boven de kamer",
+              "min_interval": "Hoogstens één wijziging per",
+              "pause_hours": "Pauze na een handmatige wijziging",
+              "baseline_night": "Nachtverlaging van de vergelijkingsthermostaat (0 = geen)",
+              "weather_source": "Weersverwachting",
+              "weather_entity": "Weerentiteit"
+            },
+            "data_description": {
+              "lowest_setpoint": "Roost zet de thermostaat nooit lager. Lager laat een trage warmtepomp sneller stoppen, maar als Home Assistant uitvalt blijft de thermostaat staan waar Roost hem liet.",
+              "max_above_room": "Zo blijft een OpenTherm-thermostaat om lauw water vragen (hoge COP).",
+              "baseline_night": "De besparing wordt getoond tegenover een vaste thermostaat op de comforttemperatuur, het gebruikelijke advies bij warmtepompen.",
+              "weather_source": "Open-Meteo heeft geen account nodig en geeft straling en wind (het huismodel gebruikt beide)."
+            }
+          }
+        }
+      },
+      "solar": {
+        "title": "Zon en thuisaccu",
+        "description": "Klap een blok open om de sensoren te zien en te wijzigen. Zet je een vinkje uit, dan vergeet Roost bij Verzenden de sensoren van dat blok.",
+        "data": {
+          "grid_preference": "Voorkeur voor eigen energie (bovenop elke kWh uit het net)"
+        },
+        "data_description": {},
+        "sections": {
+          "solar_section": {
+            "name": "Zonnepanelen en de netmeter",
+            "description": "Zonnevermogen, de zonprognose en het netvermogen: Roost laadt de vloer met zonnestroom die anders goedkoop terug het net op gaat.",
+            "data": {
+              "has_solar": "Ik heb zonnepanelen",
+              "pv_power": "Zonnevermogen",
+              "pv_forecast": "Zonverwachting vandaag",
+              "pv_forecast_tomorrow": "Zonverwachting morgen",
+              "grid_power": "Netvermogen",
+              "grid_sign": "Teken van het netvermogen"
+            },
+            "data_description": {
+              "has_solar": "Roost rekent eigen zonnestroom dan tegen wat terugleveren zou opbrengen.",
+              "grid_power": "Allemaal optioneel. Met zonnepanelen ziet Roost echt zon-overschot (teruglevering min accu-ontladen, hooguit het zonnevermogen)."
+            }
+          },
+          "battery_section": {
+            "name": "Thuisaccu",
+            "description": "Lading, vermogen en grootte: stroom uit de accu telt tegen wat bijvullen kost.",
+            "data": {
+              "has_battery": "Ik heb een thuisaccu",
+              "battery_soc": "Laadtoestand thuisaccu",
+              "battery_power": "Vermogen thuisaccu (+ = ontladen)",
+              "battery_kwh": "Bruikbare accucapaciteit",
+              "battery_kw": "Maximaal laadvermogen accu",
+              "battery_reserve": "Accureserve",
+              "battery_use": "De warmtepomp en de thuisaccu",
+              "house_power": "Huisvermogen (voor het verbruiksprofiel)"
+            },
+            "data_description": {
+              "has_battery": "Roost rekent stroom uit de accu dan tegen wat bijvullen kost.",
+              "battery_power": "Nodig om zonneteruglevering te onderscheiden van een accu die aan het net verkoopt.",
+              "battery_use": "Bewaren voor het huis: stroom die de warmtepomp uit de accu haalt kost wat het huis later mist (het uur waarin de accu leeg zou raken), dus Roost stookt in neturen en laat de accu aan het huis. Gebruiken als dat goedkoper is: als de accu ook uit het net laadt (dat leert Roost), kost stroom eruit het goedkoopste laaduur dat nog komt — voor een accu met een sturing die vooruit plant en ruimte heeft (Predbat en dergelijke).",
+              "house_power": "Optioneel. Wat het hele huis verbruikt, om het verbruik per uur van de dag te leren (welke komende uren zon over hebben, hoe lang de accu het houdt). Leeg gelaten rekent Roost het uit netvermogen + zonnevermogen (+ accuvermogen)."
+            }
+          }
+        }
+      },
+      "notify": {
+        "title": "Meldingen",
+        "description": "Uit tot je kiest waar ze heen gaan. Roost meldt dan als de thermostaat niet bereikbaar is of niet te wijzigen, als de controle niet meer slaagt terwijl hij stuurt, of als leren mislukt — per soort hooguit eens per 12 uur.",
+        "data": {
+          "notify_target": "Meldingen sturen naar",
+          "weekly_report": "Weekoverzicht (maandagochtend)"
+        },
+        "data_description": {
+          "notify_target": "Een meldingsentiteit of -dienst, bijv. notify.mobile_app_mijn_telefoon. Leeg laten: geen meldingen.",
+          "weekly_report": "Stookstroom, kosten, besparing, comfort en waar de stroom van de warmtepomp vandaan kwam, de afgelopen week."
+        }
+      }
+    },
+    "error": {
+      "not_quatt": "Dit apparaat heeft geen Quatt-warmtepompsensoren (de stand van de CIC, warmtevermogen en opgenomen vermogen).",
+      "comfort_below_min": "De comforttemperatuur moet minstens het dagminimum zijn.",
+      "store_below_comfort": "Warmte opslaan moet minstens de comforttemperatuur toestaan.",
+      "day_order": "De comforturen moeten eindigen na het begin.",
+      "weather_needed": "Kies een weerentiteit (onder Geavanceerd).",
+      "lowest_above_comfort": "De laagste thermostaatstand mag niet boven de comforttemperatuur liggen.",
+      "price_needed": "Kies een prijssensor, of kies een vaste prijs."
+    },
+    "abort": {
+      "mode_set": "De modus is ingesteld."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "setpoint": {
+        "name": "Gepland setpoint"
+      },
+      "saving_next_24h": {
+        "name": "Verwachte besparing komende 24 u"
+      },
+      "saving_yesterday": {
+        "name": "Besparing gisteren"
+      },
+      "saving_month": {
+        "name": "Besparing deze maand"
+      },
+      "cost_today": {
+        "name": "Stookkosten vandaag"
+      },
+      "energy_today": {
+        "name": "Stookstroom vandaag"
+      },
+      "energy_value": {
+        "name": "Energiewaarde nu"
+      },
+      "house_model": {
+        "name": "Fout huismodel"
+      },
+      "heat_pump_model": {
+        "name": "Warmtepompmodel"
+      },
+      "history_import": {
+        "name": "Historie-import",
+        "state": {
+          "not_yet": "Nog niet",
+          "importing": "Bezig met importeren",
+          "done": "Klaar",
+          "waiting": "Wacht",
+          "failed": "Mislukt",
+          "no_heat_pump": "Geen Quatt-warmtepomp gevonden"
+        }
+      },
+      "import_progress": {
+        "name": "Voortgang historie-import"
+      },
+      "plan_accuracy": {
+        "name": "Plannauwkeurigheid"
+      },
+      "room_expected_6h": {
+        "name": "Kamer verwacht over 6 uur"
+      },
+      "heat_planned": {
+        "name": "Warmte gepland dit uur"
+      },
+      "heating_curve": {
+        "name": "Stooklijnadvies"
+      }
+    },
+    "binary_sensor": {
+      "paused": {
+        "name": "Gepauzeerd (handmatig gewijzigd)"
+      },
+      "following": {
+        "name": "Warmtepomp volgt de thermostaat"
+      },
+      "ready": {
+        "name": "Klaar om te sturen"
+      }
+    },
+    "select": {
+      "mode": {
+        "name": "Modus",
+        "state": {
+          "off": "Uit",
+          "shadow": "Meekijken (alleen plannen)",
+          "active": "Actief"
+        }
+      }
+    },
+    "button": {
+      "learn_now": {
+        "name": "Nu leren"
+      },
+      "import_history": {
+        "name": "Historie importeren uit de statistieken"
+      }
+    }
+  },
+  "config_subentries": {
+    "room": {
+      "initiate_flow": {
+        "user": "Kamer toevoegen"
+      },
+      "entry_type": "Kamer",
+      "step": {
+        "user": {
+          "title": "Extra kamer",
+          "description": "Een kamer die de warmtepomp ook verwarmt (radiatoren boven, een slaapkamer). Roost houdt het minimum aan in de eigen uren en leert hoe de kamer afkoelt en opwarmt.",
+          "data": {
+            "name": "Naam",
+            "sensor": "Temperatuursensor",
+            "kind": "Soort kamer",
+            "minimum": "Minimum (optioneel)",
+            "hour_from": "Vanaf (optioneel)",
+            "hour_to": "Tot (optioneel)"
+          },
+          "data_description": {
+            "sensor": "Een sensor in die kamer: de meting van de radiatorkop of een losse sensor.",
+            "kind": "Bepaalt het minimum en de uren waarin het geldt; daarbuiten mag de kamer zo koel zijn als hij wil. Slaapkamer 16 °C 19–23 u, kinderkamer 18 °C 7–21 u, werkkamer 19 °C 8–18 u, badkamer 20 °C 6–9 u, overig 17 °C in de comforturen.",
+            "minimum": "Leeg laten voor het minimum van de soort.",
+            "hour_from": "Leeg laten voor de uren van de soort."
+          }
+        },
+        "reconfigure": {
+          "title": "Extra kamer",
+          "description": "Een kamer die de warmtepomp ook verwarmt (radiatoren boven, een slaapkamer). Roost houdt het minimum aan in de eigen uren en leert hoe de kamer afkoelt en opwarmt.",
+          "data": {
+            "name": "Naam",
+            "sensor": "Temperatuursensor",
+            "kind": "Soort kamer",
+            "minimum": "Minimum (optioneel)",
+            "hour_from": "Vanaf (optioneel)",
+            "hour_to": "Tot (optioneel)"
+          },
+          "data_description": {
+            "sensor": "Een sensor in die kamer: de meting van de radiatorkop of een losse sensor.",
+            "kind": "Bepaalt het minimum en de uren waarin het geldt; daarbuiten mag de kamer zo koel zijn als hij wil. Slaapkamer 16 °C 19–23 u, kinderkamer 18 °C 7–21 u, werkkamer 19 °C 8–18 u, badkamer 20 °C 6–9 u, overig 17 °C in de comforturen.",
+            "minimum": "Leeg laten voor het minimum van de soort.",
+            "hour_from": "Leeg laten voor de uren van de soort."
+          }
+        }
+      },
+      "abort": {
+        "reconfigure_successful": "De kamer is aangepast."
+      }
+    }
+  },
+  "selector": {
+    "mode": {
+      "options": {
+        "off": "Uit",
+        "shadow": "Meekijken (alleen plannen)",
+        "active": "Actief (stuurt de thermostaat)"
+      }
+    },
+    "room_kind": {
+      "options": {
+        "bedroom": "Slaapkamer",
+        "kids": "Kinderkamer",
+        "study": "Werkkamer",
+        "bathroom": "Badkamer",
+        "other": "Overig"
+      }
+    },
+    "emitter": {
+      "options": {
+        "floor": "Vloerverwarming",
+        "radiators": "Radiatoren",
+        "both": "Beide"
+      }
+    },
+    "price_mode": {
+      "options": {
+        "sensor": "Dynamisch (prijssensor)",
+        "epex": "Dynamisch, day-ahead-prijzen ingebouwd (geen sensor)",
+        "fixed": "Vaste prijs (contract)"
+      }
+    },
+    "grid_sign": {
+      "options": {
+        "import_positive": "Afname is positief",
+        "export_positive": "Teruglevering is positief"
+      }
+    },
+    "battery_use": {
+      "options": {
+        "house": "Accu bewaren voor het huis",
+        "cheaper": "Accu gebruiken als dat goedkoper is"
+      }
+    },
+    "weather_source": {
+      "options": {
+        "open_meteo": "Open-Meteo (gratis, met straling en wind)",
+        "entity": "Een weerentiteit"
+      }
+    }
+  },
+  "issues": {
+    "not_following": {
+      "title": "{name}: de warmtepomp volgt de thermostaat niet",
+      "description": "De warmtepomp stookt al meer dan 45 minuten terwijl de thermostaat geen warmte vraagt. Controleer of de thermostaat via OpenTherm op de Quatt CIC zit en of niets anders (zoals een boost) de warmtepomp laat draaien; anders kan Roost hem niet sturen."
+    },
+    "room_missing": {
+      "title": "{name}: geen kamertemperatuur",
+      "description": "De kamersensor en de thermostaat geven al 30 minuten geen kamertemperatuur. Zonder plant Roost niet."
+    },
+    "quatt_missing": {
+      "title": "{name}: Quatt-warmtepomp niet gevonden",
+      "description": "De sensoren van de Quatt-warmtepomp (de stand van de CIC, warmtevermogen en opgenomen vermogen) zijn niet beschikbaar. Controleer of de Quatt-integratie werkt."
+    },
+    "thermostat_schedule": {
+      "title": "{name}: de thermostaat wordt ook door een schema verzet",
+      "description": "Wijzigingen die Roost niet deed, komen elke dag op hetzelfde tijdstip terug: {times}. Dat is een schema in de thermostaat zelf, of een andere automatisering. Het werkt Roost tegen: na elke wijziging pauzeert Roost. Zet dat schema uit (Roost plant de hele dag) of haal de automatisering weg. Deze wijzigingen tellen niet mee voor comfortvoorstellen."
+    },
+    "no_lever": {
+      "title": "{name}: het setpoint stuurt de warmtepomp nauwelijks",
+      "description": "Roost heeft geleerd dat de thermostaat verzetten de warmtepomp maar {k} kW per °C laat veranderen. Waarschijnlijk geeft de thermostaat het setpoint niet via OpenTherm door, of begrenst hij de watertemperatuur. Roost blijft plannen, maar kan zo geen warmte naar goedkopere uren schuiven. Controleer de OpenTherm-instellingen van de thermostaat."
+    },
+    "room_cold": {
+      "title": "{name}: {room} blijft te koud",
+      "description": "Op meerdere van de laatste dagen bleef {room} urenlang onder het minimum van {minimum} °C ({hours}). Mogelijk is het water te lauw voor de radiatoren daar, of staat de radiatorknop laag. Controleer de knop; staat die open, sta dan warmer water toe: verhoog 'Setpoint hoogstens zoveel boven de kamer' bij de comfortinstellingen."
+    },
+    "thermostat_unavailable": {
+      "title": "{name}: de thermostaat is niet bereikbaar",
+      "description": "De thermostaat is al een tijd niet beschikbaar. Roost laat hem met rust tot hij terug is en plant dan opnieuw. Controleer de thermostaat of zijn integratie."
+    },
+    "set_failed": {
+      "title": "{name}: de thermostaat kan niet worden gewijzigd",
+      "description": "Roost probeerde de thermostaat een paar keer achter elkaar te wijzigen en dat mislukte: {error}. Controleer de integratie van de thermostaat; Roost blijft het in zijn gewone tempo proberen."
+    },
+    "learning_failed": {
+      "title": "{name}: leren mislukt",
+      "description": "Roost kon deze keer niet leren uit de historie. Het vorige model blijft in gebruik. Details staan in het logboek."
+    },
+    "ready_for_active": {
+      "title": "{name}: klaar om de warmtepomp te sturen",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Op actief zetten",
+            "description": "Roost heeft zijn plan getoetst aan de laatste {days} dagen: met de setpoints die echt op de thermostaat stonden, voorspelt hij de kamer 6 uur vooruit op {rmse} °C nauwkeurig, over {hours} stookuren, en de warmtepomp volgt de thermostaat.\n\nVerstuur om Roost de thermostaat te laten sturen (modus actief). Terug naar meekijken kan altijd met de modus-keuze van Roost."
+          }
+        }
+      }
+    },
+    "suggest_raise_comfort": {
+      "title": "{name}: overdag iets warmer?",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Comforttemperatuur verhogen",
+            "description": "De afgelopen twee weken is de thermostaat op {days} dagen ({count} keer) met de hand hoger gezet tijdens de comforturen.\n\nVerstuur om de comforttemperatuur van {current} naar {value} °C te verhogen. Negeer dit als het eenmalig was."
+          }
+        }
+      }
+    },
+    "suggest_lower_comfort": {
+      "title": "{name}: overdag iets koeler?",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Comforttemperatuur verlagen",
+            "description": "De afgelopen twee weken is de thermostaat op {days} dagen ({count} keer) met de hand lager gezet tijdens de comforturen.\n\nVerstuur om de comforttemperatuur van {current} naar {value} °C te verlagen — dat bespaart ook energie."
+          }
+        }
+      }
+    },
+    "suggest_earlier_day": {
+      "title": "{name}: comforturen eerder laten beginnen?",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Comforturen eerder laten beginnen",
+            "description": "De afgelopen twee weken is de thermostaat op {days} dagen ({count} keer) met de hand hoger gezet kort voor de comforturen.\n\nVerstuur om de comforturen om {value} te laten beginnen in plaats van {current}."
+          }
+        }
+      }
+    },
+    "suggest_later_day": {
+      "title": "{name}: comforturen later laten eindigen?",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Comforturen later laten eindigen",
+            "description": "De afgelopen twee weken is de thermostaat op {days} dagen ({count} keer) met de hand hoger gezet kort na de comforturen.\n\nVerstuur om de comforturen om {value} te laten eindigen in plaats van {current}."
+          }
+        }
+      }
+    },
+    "suggest_earlier_night": {
+      "title": "{name}: comforturen eerder laten eindigen?",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Comforturen eerder laten eindigen",
+            "description": "De afgelopen twee weken is de thermostaat op {days} dagen ({count} keer) met de hand lager gezet tegen het einde van de comforturen.\n\nVerstuur om de comforturen om {value} te laten eindigen in plaats van {current} — dat bespaart ook energie."
+          }
+        }
+      }
+    }
+  },
+  "services": {
+    "pause": {
+      "name": "Pauzeren",
+      "description": "De thermostaat een tijd met rust laten.",
+      "fields": {
+        "hours": {
+          "name": "Uren"
+        }
+      }
+    },
+    "resume": {
+      "name": "Hervatten",
+      "description": "Een pauze beëindigen en opnieuw plannen.",
+      "fields": {}
+    },
+    "away": {
+      "name": "Afwezig",
+      "description": "Niemand thuis tot een moment: alleen het afwezig-minimum telt, geen comforturen; Roost is weer warm als je terug bent.",
+      "fields": {
+        "until": {
+          "name": "Tot"
+        },
+        "days": {
+          "name": "Dagen (in plaats van tot)"
+        },
+        "minimum": {
+          "name": "Minimum tijdens afwezigheid"
+        }
+      }
+    },
+    "home": {
+      "name": "Weer thuis",
+      "description": "Afwezig beëindigen: de comforturen tellen weer.",
+      "fields": {}
+    },
+    "set_settings": {
+      "name": "Temperaturen en comforturen instellen",
+      "description": "Roosts eigen instellingen (niet de thermostaat), zoals bij Configureren → Comfort; de gewijzigde wint, de andere volgen.",
+      "fields": {
+        "comfort": {
+          "name": "Comfort (overdag)"
+        },
+        "day_min": {
+          "name": "Minimum overdag"
+        },
+        "night_min": {
+          "name": "Minimum 's nachts"
+        },
+        "store_max": {
+          "name": "Warmte opslaan tot"
+        },
+        "lowest_setpoint": {
+          "name": "Laagste setpoint"
+        },
+        "day_from": {
+          "name": "Comforturen vanaf"
+        },
+        "day_to": {
+          "name": "Comforturen tot"
+        }
+      }
+    },
+    "import_history": {
+      "name": "Historie importeren uit de statistieken",
+      "description": "De uren van de warmtepomp lezen uit de langetermijnstatistieken van Home Assistant van de Quatt-sensoren en daarvan leren.",
+      "fields": {
+        "days": {
+          "name": "Dagen"
+        }
+      }
+    },
+    "explain_saving": {
+      "name": "Besparing uitleggen",
+      "description": "Waar de besparing vandaan komt, per uur t.o.v. een vaste thermostaat met hetzelfde comfort, voor gisteren (of een dag uit de afgelopen week) of de komende 24 uur, met hoe het plan veranderde en waarom.",
+      "fields": {
+        "day": {
+          "name": "Dag: yesterday, next_24h of een datum (JJJJ-MM-DD)"
+        }
+      }
+    }
+  }
+}

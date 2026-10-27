@@ -10,6 +10,7 @@ from core import load, run_all  # noqa: E402
 model = load("model")
 heatpump = load("heatpump")
 history = load("history")
+quatt = load("quatt")
 weather = load("weather")
 sun = load("sun")
 
@@ -88,25 +89,23 @@ def test_profiles():
     assert heatpump.profile_for("Sparrow") == "generic"
 
 
-def test_weheat_logs_and_precedence():
-    logs = [{"timeBucket": "2026-01-15T10:00:00Z", "tRoomAverage": 20.4, "tAirInAverage": 3.1, "heatPumpStateHeating": 3000,
-             "heatPumpStateDhw": 600, "heatPumpStateManualControl": 0},
-            {"timeBucket": "2026-01-15T11:00:00Z", "tRoomAverage": -1, "tAirInAverage": -1, "heatPumpStateHeating": 3600},
-            {"timeBucket": "2026-01-15T12:00:00Z", "tRoomAverage": 20.6, "heatPumpStateManualControl": 3600}]
-    energy = [{"timeBucket": "2026-01-15T10:00:00Z", "totalEOutHeating": 4.0, "totalEOutHeatingDefrost": -0.3, "totalEInHeating": 1.1,
-               "totalEInHeatingDefrost": 0.05},
-              {"timeBucket": "2026-01-15T11:00:00Z", "totalEOutHeating": 4.2, "totalEInHeating": 1.2},
-              {"timeBucket": "2026-01-15T12:00:00Z", "totalEOutHeating": 1.0, "totalEInHeating": 0.4}]
-    w = history.weheat_hours(logs, energy)
+def test_quatt_hours_and_precedence():
     t10 = 1768471200
-    assert abs(w[t10]["q"] - 3.7) < 1e-9 and abs(w[t10]["e"] - 1.15) < 1e-9 and w[t10]["dhw_s"] == 600
-    assert w[t10 + 3600]["room"] is None and w[t10 + 3600]["sensor_out"] is None      # -1 °C = sensor fault
-    wx = {t10: (2.0, 0.1, 4.0), t10 + 3600: (2.5, 0.2, 4.0), t10 + 7200: (3.0, 0.2, 4.0)}
+    stats = {"power_in": {t10: {"mean": 1.15, "min": 1.0, "max": 1.3}, t10 + 3600: {"mean": 1.2, "min": 1.1, "max": 1.3}},
+             "power_out": {t10: {"mean": 3.7}, t10 + 3600: {"mean": 4.2}},
+             "thermostat_room": {t10: {"mean": 20.4}, t10 + 3600: {"mean": 0.0}},
+             "outdoor": {t10: {"mean": 3.1}, t10 + 3600: {"mean": 99.0}}}
+    w = quatt.hours_from_stats(stats, {})
+    assert abs(w[t10]["q"] - 3.7) < 1e-9 and abs(w[t10]["e"] - 1.15) < 1e-9 and w[t10]["heating_s"] == 3600
+    assert "room" not in w[t10 + 3600] and "sensor_out" not in w[t10 + 3600]      # 0 °C indoors, 99 °C out: faults
+    w[t10 + 3600]["heating_s_live"] = 1800                                          # Roost counted it: wins
+    wx = {t10: (2.0, 0.1, 4.0), t10 + 3600: (2.5, 0.2, 4.0)}
     ha = {t10: {"room": 20.9, "q": 9.9}, t10 + 3600: {"thermostat_room": 20.7}}
     rows = history.build_rows(w, ha, wx)
-    assert [r.ts for r in rows] == [t10, t10 + 3600]           # hour 12 was manual control: left out
-    assert rows[0].T == 20.9 and abs(rows[0].Q - 3.7) < 1e-9   # HA's room sensor, Weheat's meter
-    assert rows[1].T == 20.7 and rows[1].T_out_sensor is None
+    assert [r.ts for r in rows] == [t10, t10 + 3600]
+    assert rows[0].T == 20.9 and abs(rows[0].Q - 3.7) < 1e-9   # HA's room sensor, the Quatt's heat
+    assert rows[0].T_th == 20.4 and rows[0].T_out_sensor == 3.1
+    assert rows[1].T == 20.7 and rows[1].T_out_sensor is None and rows[1].heating_s == 1800
 
 
 def test_open_meteo_radiation_shift():

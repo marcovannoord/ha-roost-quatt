@@ -4,7 +4,7 @@ import os
 import sys
 import types
 
-_DIR = os.path.join(os.path.dirname(__file__), "..", "custom_components", "roost")
+_DIR = os.path.join(os.path.dirname(__file__), "..", "custom_components", "roost_quatt")
 
 
 def load(name: str):

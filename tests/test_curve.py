@@ -1,4 +1,4 @@
-"""Heating curve advice: the house's need, the emitters and the five points of the Weheat app."""
+"""Heating curve advice: the house's need, the emitters and the five points shown."""
 import os
 import random
 import sys
@@ -8,6 +8,7 @@ from core import load, run_all  # noqa: E402
 
 curve = load("curve")
 history = load("history")
+quatt = load("quatt")
 model = load("model")
 
 UA, BASE, K, N, ROOM = 0.2, -0.5, 0.18, 1.1, 20.5      # kW/°C, kW, kW/°C^n, floor
@@ -45,16 +46,16 @@ def test_the_line_stays_on_or_above_the_need():
     need = lambda t: ROOM + ((UA * (ROOM - t) + BASE) / K) ** (1 / N)       # noqa: E731
     top = a.cycling_from
     assert top is not None and abs(top - (ROOM - (2.0 - BASE) / UA)) < 0.5   # need = lowest output: ≈ 8 °C
-    t = -20.0
+    t = curve.CURVE_X[0]                                         # from the coldest point shown
     while t <= top:
         assert a.flow_at(t) >= need(t) - 0.01, (t, a.flow_at(t), need(t))
         t += 0.5
     ys = [y for _x, y, _m in a.points if y is not None]
     assert ys == sorted(ys, reverse=True)                        # never warmer towards milder weather
     assert all(p[1] is not None for p in a.points)               # a value for every point of the app
-    assert a.points[-1][1] == curve._up(ROOM)                     # 25 °C: no heat needed, water at room temperature
-    assert a.points[2][1] >= need(15.0) - 0.01                    # 15 °C, in the cycling zone: still covers the need
-    assert -20.0 in a.extrapolated and a.points[1][2] is not None   # 9 °C: what the unit made there (measured)
+    assert a.points[-1][1] >= need(10.0) - 0.01                  # 10 °C, in the cycling zone: still covers the need
+    assert a.points[2][1] >= need(0.0) - 0.01                    # 0 °C
+    assert -10.0 in a.extrapolated and a.points[3][2] is not None   # 5 °C: what the unit made there (measured)
     assert 0 < len(a.cloud) <= curve.CLOUD_MAX and a.cold_hour == -2.0      # the steady hours for the graph; coldest heated hour
 
 
@@ -79,7 +80,7 @@ def test_radiators_need_warmer_water_than_a_floor():
 
 
 def test_measured_under_opentherm_or_the_curve():
-    """The Weheat logs say per hour whether an OpenTherm thermostat asked a water temperature: the measured flows are
+    """The CIC's control setpoint says per hour whether an OpenTherm thermostat asked a water temperature: the measured flows are
     labelled with what controlled the unit."""
     rows, flows = _house()
     steady = {r.ts for r in rows if r.Q >= 0.5}
@@ -114,33 +115,14 @@ def test_kept_over_a_restart():
     assert b == a and curve.CurveAdvice.from_dict(None) is None and curve.CurveAdvice.from_dict({"x": 1}) is None
 
 
-def test_flow_and_return_from_the_weheat_logs():
-    h = history.weheat_hours([{"timeBucket": "2026-10-20T06:00:00Z", "tWaterOutAverage": 31.4, "tWaterInAverage": 27.9,
-                               "heatPumpStateHeating": 3600}], [])
-    v = next(iter(h.values()))
-    assert (v["flow"], v["ret"]) == (31.4, 27.9) and v["rpm"] is None
-    assert curve.flows_from_weheat(h) == {next(iter(h)): 31.4}
-
-
-def test_reading_logs_again_keeps_the_energy():
-    """A read of the hourly logs alone (to add fields) on top of hours with their energy: the energy stays."""
-    t = "2026-01-10T06:00:00Z"
-    have = history.weheat_hours([{"timeBucket": t, "tRoomAverage": 20.4, "heatPumpStateHeating": 3600}],
-                                [{"timeBucket": t, "totalEOutHeating": 3.1, "totalEInHeating": 0.8, "totalEInDhw": 0.2}])
-    history.merge_hours(have, history.weheat_hours([{"timeBucket": t, "tRoomAverage": 20.4, "tWaterOutAverage": 33.0}], []))
-    v = next(iter(have.values()))
-    assert (v["q"], v["e"], v["dhw_e"], v["flow"]) == (3.1, 0.8, 0.2, 33.0)
-
-
-def test_extra_weheat_fields_kept_compactly():
-    """Thermostat demand, backup heater, compressor limits, errors: kept when not zero, left out when zero or empty."""
-    h = history.weheat_hours([{"timeBucket": "2026-10-20T06:00:00Z", "thermostatStateOn": 3600, "controlBridgeStatusElectricHeater": 0,
-                               "rpmLimiterSilentHours": 1800.0, "dtcError": None, "tThermostatSetpointAverage": 31.27}],
-                             [{"timeBucket": "2026-10-20T06:00:00Z", "totalEOutHeating": 2.0, "totalEInStandby": 0.012,
-                               "totalEOutDhw": 0}])
-    v = next(iter(h.values()))
-    assert (v["th_on_s"], v["lim_silent_s"], v["th_water"], v["standby_e"]) == (3600.0, 1800.0, 31.27, 0.01)
-    assert not {"heater_s", "err_s", "dhw_q", "boiler_s"} & set(v)
+def test_flow_and_opentherm_from_the_hours():
+    """The flow to the house and the thermostat's demand, as quatt.hours_from_stats keeps them."""
+    t = 1768471200
+    h = quatt.hours_from_stats({"power_in": {t: {"mean": 0.9, "min": 0.8, "max": 1.0}}, "power_out": {t: {"mean": 3.6}},
+                                "water_out": {t: {"mean": 31.4}}, "water_in": {t: {"mean": 27.9}},
+                                "water_setpoint": {t: {"mean": 30.2, "max": 33.0}}}, {})
+    assert (h[t]["flow"], h[t]["ret"], h[t]["th_water"]) == (31.4, 27.9, 30.2)
+    assert curve.flows_from_hours(h) == {t: 31.4} and curve.opentherm_from_hours(h) == {t}
 
 
 if __name__ == "__main__":

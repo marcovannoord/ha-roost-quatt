@@ -1,0 +1,742 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Roost pour Quatt",
+        "description": "Roost planifie le thermostat de votre pompe à chaleur Quatt 24 heures à l'avance selon le prix, la météo et la chaleur que stocke votre maison. Il démarre en mode observation : il montre seulement ce qu'il ferait. Les entités trouvées sont déjà remplies ; vérifiez-les. Aucune connexion nécessaire : Roost lit les capteurs de l'intégration Quatt.",
+        "data": {
+          "name": "Nom",
+          "heat_pump": "Quatt CIC",
+          "thermostat": "Thermostat qui commande la pompe à chaleur",
+          "import_history": "Importer maintenant l'historique de la pompe à chaleur"
+        },
+        "data_description": {
+          "heat_pump": "Un appareil de l'intégration Quatt (home-assistant-quatt), par exemple le CIC. Ses capteurs sont trouvés automatiquement.",
+          "thermostat": "Roost change seulement la température de consigne de ce thermostat, comme vous le feriez. Il doit être relié au CIC Quatt en OpenTherm.",
+          "import_history": "Depuis les statistiques à long terme de Home Assistant pour les capteurs Quatt (chaleur, électricité, températures) : jusqu'à un an d'heures, pour que Roost connaisse votre maison et votre pompe à chaleur dès le premier jour. Quelques secondes ; rien ne quitte Home Assistant."
+        }
+      },
+      "house": {
+        "title": "La maison",
+        "description": "Un capteur de pièce séparé est meilleur que la mesure du thermostat.",
+        "data": {
+          "room_temperature": "Capteur de température de pièce (facultatif, meilleur que celui du thermostat)",
+          "emitter": "Émetteurs de chaleur",
+          "use_bag": "Données du registre néerlandais des bâtiments (BAG)",
+          "window_sensors": "Capteurs de fenêtres et de portes (facultatif)"
+        },
+        "data_description": {
+          "emitter": "Un plancher chauffant stocke beaucoup de chaleur et atteint la pièce lentement ; les radiateurs réagissent en quelques minutes et la maison elle-même sert de tampon. Seulement les valeurs de départ : Roost apprend votre maison à partir de ses données.",
+          "use_bag": "Pays-Bas uniquement. Envoie une fois l'emplacement de votre Home Assistant à PDOK (Kadaster) pour trouver l'année de construction, la surface et les murs extérieurs de votre maison : de meilleures valeurs de départ et seulement les orientations de façade de votre maison. Roost ne garde aucune adresse. Désactiver supprime les données.",
+          "window_sensors": "Roost reconnaît aussi l'aération à une baisse rapide de la température de la pièce ; avec des capteurs il le sait tout de suite. Tant qu'une fenêtre est ouverte, Roost attend et n'en apprend rien."
+        }
+      },
+      "price": {
+        "title": "Prix de l'électricité",
+        "description": "Un contrat dynamique : choisissez le capteur avec les prix des prochaines heures — ou, sans un tel capteur, « prix day-ahead intégrés » et saisissez la formule de votre fournisseur à l'étape suivante. Un contrat à prix fixe : choisissez « Prix fixe ».",
+        "data": {
+          "price_mode": "Prix de l'électricité",
+          "import_price": "Capteur de prix de l'électricité (avec prévision)",
+          "export_price": "Prix d'injection"
+        },
+        "data_description": {
+          "price_mode": "Dynamique : un capteur avec des prix horaires. Fixe : vous saisissez le tarif de votre contrat (et un tarif heures creuses s'il y en a un) à l'étape suivante.",
+          "import_price": "Seulement avec un prix dynamique. Un capteur avec les prix des prochaines heures dans ses attributs (Nord Pool, ENTSO-e, Frank Energie, Zonneplan, Tibber, evcc, …) — pour Zonneplan « Current electricity tariff ». Des capteurs séparés pour chaque heure à venir ne fonctionnent pas ; choisissez plutôt les prix day-ahead intégrés.",
+          "export_price": "Laisser vide avec la compensation : l'injection vaut alors le prix d'achat."
+        }
+      },
+      "price_epex": {
+        "title": "Prix day-ahead (intégrés)",
+        "description": "Roost récupère lui-même les prix day-ahead (EPEX), par quart d'heure, chez Energy-Charts — aucun capteur nécessaire. Ce que coûte un kWh = day-ahead × multiplicateur + montant fixe ; de même pour l'injection si elle a son propre prix.",
+        "data": {
+          "epex_zone": "Zone de prix",
+          "import_mult": "Multiplicateur",
+          "import_add": "Montant fixe par kWh",
+          "export_formula": "L'injection a son propre prix (pas de compensation)",
+          "export_mult": "Injection : multiplicateur",
+          "export_add": "Injection : montant fixe par kWh"
+        },
+        "data_description": {
+          "epex_zone": "Le marché day-ahead de votre pays (p. ex. FR, BE, NL) ; rempli à partir du pays de votre Home Assistant.",
+          "import_mult": "Généralement 1 + TVA, p. ex. 1,21 aux Pays-Bas, 1,06 en Belgique.",
+          "import_add": "La marge de votre fournisseur plus les taxes, TVA comprise. Exemple : (marge + taxes) × 1,21.",
+          "export_formula": "Désactivé : compensation — l'injection vaut le prix d'achat. Activé : la formule ci-dessous.",
+          "export_mult": "Souvent 1 (pas de TVA ni de taxe sur l'injection sans compensation).",
+          "export_add": "La rémunération d'injection de votre fournisseur, négative si elle vous coûte, p. ex. -0,02."
+        }
+      },
+      "price_fixed": {
+        "title": "Prix fixe",
+        "description": "Comme sur votre facture, tout compris.",
+        "data": {
+          "fixed_price": "Prix par kWh (tarif normal)",
+          "fixed_low_price": "Tarif heures creuses par kWh (facultatif)",
+          "low_from": "Heures creuses à partir de",
+          "low_to": "Heures creuses jusqu'à",
+          "low_weekend": "Heures creuses tout le week-end",
+          "fixed_export_price": "Prix d'injection par kWh (facultatif)"
+        },
+        "data_description": {
+          "fixed_price": "Tout compris : énergie, taxes et TVA, comme sur votre facture.",
+          "fixed_low_price": "Laisser vide avec un tarif unique.",
+          "low_weekend": "Beaucoup de compteurs bihoraires comptent tout le week-end en heures creuses.",
+          "fixed_export_price": "Laisser vide avec la compensation : l'injection vaut alors le prix d'achat."
+        }
+      },
+      "solar": {
+        "title": "Solaire et batterie domestique",
+        "description": "Cochez ce que votre maison possède ; seuls ces champs suivent. Sans l'un ni l'autre, passez.",
+        "data": {
+          "has_solar": "J'ai des panneaux solaires",
+          "has_battery": "J'ai une batterie domestique"
+        },
+        "data_description": {
+          "has_solar": "Roost compte alors le solaire propre à ce que son injection rapporterait.",
+          "has_battery": "Roost valorise alors l'énergie de la batterie à ce que coûte sa recharge."
+        }
+      },
+      "solar_details": {
+        "title": "Solaire et batterie domestique",
+        "description": "Les entités trouvées sont remplies ; vérifiez-les. Tous les champs sont facultatifs.",
+        "data": {
+          "pv_power": "Puissance solaire",
+          "pv_forecast": "Prévision solaire aujourd'hui",
+          "pv_forecast_tomorrow": "Prévision solaire demain",
+          "grid_power": "Puissance réseau",
+          "grid_sign": "Signe de la puissance réseau",
+          "battery_soc": "Niveau de charge de la batterie",
+          "battery_power": "Puissance de la batterie (+ = décharge)",
+          "battery_kwh": "Capacité utile de la batterie",
+          "battery_kw": "Puissance de charge maximale de la batterie",
+          "battery_reserve": "Réserve de la batterie",
+          "battery_use": "La pompe à chaleur et la batterie domestique",
+          "house_power": "Puissance de la maison (pour le profil de consommation)",
+          "grid_preference": "Préférence pour l'énergie propre (ajoutée par kWh du réseau)"
+        },
+        "data_description": {
+          "grid_power": "Tout est facultatif. Avec le solaire, Roost voit le vrai surplus solaire (injection moins décharge de la batterie, au plus la puissance solaire).",
+          "battery_power": "Nécessaire pour distinguer l'injection solaire d'une batterie qui revend au réseau.",
+          "battery_use": "La garder pour la maison : l'énergie que la pompe à chaleur prend à la batterie coûte ce qui manquera plus tard à la maison (l'heure où la batterie serait vide), donc Roost chauffe aux heures réseau et laisse la batterie à la maison. L'utiliser quand c'est moins cher : si la batterie est aussi chargée depuis le réseau (Roost l'apprend), son énergie coûte la moins chère de ses heures de charge à venir — pour une batterie dont le pilotage planifie à l'avance et a de la place (Predbat et similaires).",
+          "house_power": "Facultatif. Ce que consomme toute la maison, pour apprendre sa consommation par heure de la journée (quelles heures à venir ont du surplus solaire, combien de temps tient la batterie). Laissé vide, Roost le calcule à partir de la puissance réseau + solaire (+ batterie)."
+        }
+      },
+      "comfort": {
+        "title": "Confort",
+        "description": "Roost garde la pièce à la température de confort pendant les heures de confort et ne la laisse jamais descendre sous les minimums. Rempli à partir des dernières semaines de votre thermostat quand c'était possible.",
+        "data": {
+          "day_from": "Début des heures de confort",
+          "day_to": "Fin des heures de confort",
+          "comfort": "Température de confort (jour)",
+          "day_min": "Jamais en dessous le jour",
+          "night_min": "Jamais en dessous la nuit",
+          "store_max": "Le plus chaud en stockant la chaleur"
+        },
+        "data_description": {
+          "store_max": "Roost stocke de la chaleur dans le sol (ou la maison) quand une heure est bon marché (ou que le solaire rapporte peu) et qu'une heure chère suit. Réglez-le égal à la température de confort pour désactiver cela."
+        },
+        "sections": {
+          "advanced": {
+            "name": "Avancé : régulation et météo",
+            "description": "Les valeurs par défaut conviennent à la plupart des maisons.",
+            "data": {
+              "lowest_setpoint": "Réglage le plus bas du thermostat",
+              "max_above_room": "Consigne au plus de ceci au-dessus de la pièce",
+              "min_interval": "Au plus un changement par",
+              "pause_hours": "Pause après un changement à la main",
+              "baseline_night": "Abaissement de nuit du thermostat de comparaison (0 = aucun)",
+              "weather_source": "Prévisions météo",
+              "weather_entity": "Entité météo"
+            },
+            "data_description": {
+              "lowest_setpoint": "Roost ne règle jamais le thermostat plus bas. Un réglage plus bas arrête plus tôt une pompe lente, mais si Home Assistant tombe en panne, le thermostat reste là où Roost l'a laissé.",
+              "max_above_room": "Garde un thermostat OpenTherm sur de l'eau tiède (COP élevé).",
+              "baseline_night": "L'économie est montrée par rapport à un thermostat constant à la température de confort, le conseil habituel pour les pompes à chaleur.",
+              "weather_source": "Open-Meteo ne demande pas de compte et donne le rayonnement et le vent (le modèle de la maison utilise les deux)."
+            }
+          }
+        }
+      }
+    },
+    "error": {
+      "not_quatt": "Cet appareil n'a pas de capteurs de pompe à chaleur Quatt (état du CIC, puissance thermique et puissance absorbée).",
+      "comfort_below_min": "La température de confort doit être au moins le minimum de jour.",
+      "store_below_comfort": "Le stockage de chaleur doit permettre au moins la température de confort.",
+      "day_order": "Les heures de confort doivent finir après leur début.",
+      "weather_needed": "Choisissez une entité météo (sous Avancé).",
+      "lowest_above_comfort": "Le réglage le plus bas du thermostat ne doit pas dépasser la température de confort.",
+      "price_needed": "Choisissez un capteur de prix, ou un prix fixe."
+    },
+    "abort": {
+      "already_configured": "Cette pompe à chaleur est déjà configurée."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Roost",
+        "description": "{saved}**La maison :** {house}\n**Prix de l'électricité :** {price}\n**Solaire et batterie :** {solar}\n**Confort :** {comfort}\n**Pièces supplémentaires :** {rooms} (à ajouter sur la page de l'intégration)\n\nChaque partie s'enregistre à la validation et revient ici ; *Terminé* ferme.",
+        "menu_options": {
+          "mode": "Mode : observation ou pilotage",
+          "house": "La maison et le thermostat",
+          "price": "Prix de l'électricité",
+          "solar": "Solaire et batterie domestique",
+          "comfort": "Confort",
+          "notify": "Notifications",
+          "done": "Terminé"
+        }
+      },
+      "mode": {
+        "title": "Mode",
+        "description": "**Prêt à piloter : {verdict}**\nPrévu : {eta}\nVérifié sur : {basis}\n\n{plan_ok} Erreur du plan à 6 h : {plan_error} °C (requis : 0,5 ou moins)\n{hours_ok} Heures de chauffe dans la semaine vérifiée : {hours} (requis : 30)\n{heat_ok} Chaleur prévue ÷ mesurée : {heat} (requis : 0,7–1,3)\n{follows} La pompe à chaleur suit le thermostat\n{lever} La consigne fait varier la pompe à chaleur\n\nL'auto-contrôle a lieu chaque nuit à 03:30. **Observation** : Roost planifie et montre, sans jamais toucher au thermostat. **Actif** : Roost pilote le thermostat. **Arrêt** : rien.",
+        "data": {
+          "mode": "Mode"
+        }
+      },
+      "house": {
+        "title": "La maison",
+        "description": "Un capteur de pièce séparé est meilleur que la mesure du thermostat.",
+        "data": {
+          "thermostat": "Thermostat qui commande la pompe à chaleur",
+          "room_temperature": "Capteur de température de pièce (facultatif, meilleur que celui du thermostat)",
+          "emitter": "Émetteurs de chaleur",
+          "use_bag": "Données du registre néerlandais des bâtiments (BAG)",
+          "window_sensors": "Capteurs de fenêtres et de portes (facultatif)"
+        },
+        "data_description": {
+          "thermostat": "Roost change seulement la température cible de ce thermostat, comme vous le feriez. La pompe à chaleur doit suivre le thermostat (pas sa propre courbe de chauffe).",
+          "emitter": "Un plancher chauffant stocke beaucoup de chaleur et atteint la pièce lentement ; les radiateurs réagissent en quelques minutes et la maison elle-même sert de tampon. Seulement les valeurs de départ : Roost apprend votre maison à partir de ses données.",
+          "use_bag": "Pays-Bas uniquement. Envoie une fois l'emplacement de votre Home Assistant à PDOK (Kadaster) pour trouver l'année de construction, la surface et les murs extérieurs de votre maison : de meilleures valeurs de départ et seulement les orientations de façade de votre maison. Roost ne garde aucune adresse. Désactiver supprime les données.",
+          "window_sensors": "Roost reconnaît aussi l'aération à une baisse rapide de la température de la pièce ; avec des capteurs il le sait tout de suite. Tant qu'une fenêtre est ouverte, Roost attend et n'en apprend rien."
+        }
+      },
+      "price": {
+        "title": "Prix de l'électricité",
+        "description": "Un contrat dynamique : choisissez le capteur avec les prix des prochaines heures — ou, sans un tel capteur, « prix day-ahead intégrés » et saisissez la formule de votre fournisseur à l'étape suivante. Un contrat à prix fixe : choisissez « Prix fixe ».",
+        "data": {
+          "price_mode": "Prix de l'électricité",
+          "import_price": "Capteur de prix de l'électricité (avec prévision)",
+          "export_price": "Prix d'injection"
+        },
+        "data_description": {
+          "price_mode": "Dynamique : un capteur avec des prix horaires. Fixe : vous saisissez le tarif de votre contrat (et un tarif heures creuses s'il y en a un) à l'étape suivante.",
+          "import_price": "Seulement avec un prix dynamique. Un capteur avec les prix des prochaines heures dans ses attributs (Nord Pool, ENTSO-e, Frank Energie, Zonneplan, Tibber, evcc, …) — pour Zonneplan « Current electricity tariff ». Des capteurs séparés pour chaque heure à venir ne fonctionnent pas ; choisissez plutôt les prix day-ahead intégrés.",
+          "export_price": "Laisser vide avec la compensation : l'injection vaut alors le prix d'achat."
+        }
+      },
+      "price_fixed": {
+        "title": "Prix fixe",
+        "description": "Comme sur votre facture, tout compris.",
+        "data": {
+          "fixed_price": "Prix par kWh (tarif normal)",
+          "fixed_low_price": "Tarif heures creuses par kWh (facultatif)",
+          "low_from": "Heures creuses à partir de",
+          "low_to": "Heures creuses jusqu'à",
+          "low_weekend": "Heures creuses tout le week-end",
+          "fixed_export_price": "Prix d'injection par kWh (facultatif)"
+        },
+        "data_description": {
+          "fixed_price": "Tout compris : énergie, taxes et TVA, comme sur votre facture.",
+          "fixed_low_price": "Laisser vide avec un tarif unique.",
+          "low_weekend": "Beaucoup de compteurs bihoraires comptent tout le week-end en heures creuses.",
+          "fixed_export_price": "Laisser vide avec la compensation : l'injection vaut alors le prix d'achat."
+        }
+      },
+      "price_epex": {
+        "title": "Prix day-ahead (intégrés)",
+        "description": "Roost récupère lui-même les prix day-ahead (EPEX), par quart d'heure, chez Energy-Charts — aucun capteur nécessaire. Ce que coûte un kWh = day-ahead × multiplicateur + montant fixe ; de même pour l'injection si elle a son propre prix.",
+        "data": {
+          "epex_zone": "Zone de prix",
+          "import_mult": "Multiplicateur",
+          "import_add": "Montant fixe par kWh",
+          "export_formula": "L'injection a son propre prix (pas de compensation)",
+          "export_mult": "Injection : multiplicateur",
+          "export_add": "Injection : montant fixe par kWh"
+        },
+        "data_description": {
+          "epex_zone": "Le marché day-ahead de votre pays (p. ex. FR, BE, NL) ; rempli à partir du pays de votre Home Assistant.",
+          "import_mult": "Généralement 1 + TVA, p. ex. 1,21 aux Pays-Bas, 1,06 en Belgique.",
+          "import_add": "La marge de votre fournisseur plus les taxes, TVA comprise. Exemple : (marge + taxes) × 1,21.",
+          "export_formula": "Désactivé : compensation — l'injection vaut le prix d'achat. Activé : la formule ci-dessous.",
+          "export_mult": "Souvent 1 (pas de TVA ni de taxe sur l'injection sans compensation).",
+          "export_add": "La rémunération d'injection de votre fournisseur, négative si elle vous coûte, p. ex. -0,02."
+        }
+      },
+      "comfort": {
+        "title": "Confort",
+        "description": "Roost garde la pièce à la température de confort pendant les heures de confort et ne la laisse jamais descendre sous les minimums. Rempli à partir des dernières semaines de votre thermostat quand c'était possible.",
+        "data": {
+          "day_from": "Début des heures de confort",
+          "day_to": "Fin des heures de confort",
+          "comfort": "Température de confort (jour)",
+          "day_min": "Jamais en dessous le jour",
+          "night_min": "Jamais en dessous la nuit",
+          "store_max": "Le plus chaud en stockant la chaleur"
+        },
+        "data_description": {
+          "store_max": "Roost stocke de la chaleur dans le sol (ou la maison) quand une heure est bon marché (ou que le solaire rapporte peu) et qu'une heure chère suit. Réglez-le égal à la température de confort pour désactiver cela."
+        },
+        "sections": {
+          "advanced": {
+            "name": "Avancé : régulation et météo",
+            "description": "Les valeurs par défaut conviennent à la plupart des maisons.",
+            "data": {
+              "lowest_setpoint": "Réglage le plus bas du thermostat",
+              "max_above_room": "Consigne au plus de ceci au-dessus de la pièce",
+              "min_interval": "Au plus un changement par",
+              "pause_hours": "Pause après un changement à la main",
+              "baseline_night": "Abaissement de nuit du thermostat de comparaison (0 = aucun)",
+              "weather_source": "Prévisions météo",
+              "weather_entity": "Entité météo"
+            },
+            "data_description": {
+              "lowest_setpoint": "Roost ne règle jamais le thermostat plus bas. Un réglage plus bas arrête plus tôt une pompe lente, mais si Home Assistant tombe en panne, le thermostat reste là où Roost l'a laissé.",
+              "max_above_room": "Garde un thermostat OpenTherm sur de l'eau tiède (COP élevé).",
+              "baseline_night": "L'économie est montrée par rapport à un thermostat constant à la température de confort, le conseil habituel pour les pompes à chaleur.",
+              "weather_source": "Open-Meteo ne demande pas de compte et donne le rayonnement et le vent (le modèle de la maison utilise les deux)."
+            }
+          }
+        }
+      },
+      "solar": {
+        "title": "Solaire et batterie domestique",
+        "description": "Ouvrez un bloc pour voir et modifier ses capteurs. Décocher une case oublie les capteurs de ce bloc à la validation.",
+        "data": {
+          "grid_preference": "Préférence pour l'énergie propre (ajoutée par kWh du réseau)"
+        },
+        "data_description": {},
+        "sections": {
+          "solar_section": {
+            "name": "Panneaux solaires et compteur réseau",
+            "description": "Puissance solaire, sa prévision et la puissance réseau : Roost charge le sol avec le solaire qui serait sinon injecté à bas prix.",
+            "data": {
+              "has_solar": "J'ai des panneaux solaires",
+              "pv_power": "Puissance solaire",
+              "pv_forecast": "Prévision solaire aujourd'hui",
+              "pv_forecast_tomorrow": "Prévision solaire demain",
+              "grid_power": "Puissance réseau",
+              "grid_sign": "Signe de la puissance réseau"
+            },
+            "data_description": {
+              "has_solar": "Roost compte alors le solaire propre à ce que son injection rapporterait.",
+              "grid_power": "Tout est facultatif. Avec le solaire, Roost voit le vrai surplus solaire (injection moins décharge de la batterie, au plus la puissance solaire)."
+            }
+          },
+          "battery_section": {
+            "name": "Batterie domestique",
+            "description": "Sa charge, sa puissance et sa taille : l'énergie de la batterie vaut ce que coûte sa recharge.",
+            "data": {
+              "has_battery": "J'ai une batterie domestique",
+              "battery_soc": "Niveau de charge de la batterie",
+              "battery_power": "Puissance de la batterie (+ = décharge)",
+              "battery_kwh": "Capacité utile de la batterie",
+              "battery_kw": "Puissance de charge maximale de la batterie",
+              "battery_reserve": "Réserve de la batterie",
+              "battery_use": "La pompe à chaleur et la batterie domestique",
+              "house_power": "Puissance de la maison (pour le profil de consommation)"
+            },
+            "data_description": {
+              "has_battery": "Roost valorise alors l'énergie de la batterie à ce que coûte sa recharge.",
+              "battery_power": "Nécessaire pour distinguer l'injection solaire d'une batterie qui revend au réseau.",
+              "battery_use": "La garder pour la maison : l'énergie que la pompe à chaleur prend à la batterie coûte ce qui manquera plus tard à la maison (l'heure où la batterie serait vide), donc Roost chauffe aux heures réseau et laisse la batterie à la maison. L'utiliser quand c'est moins cher : si la batterie est aussi chargée depuis le réseau (Roost l'apprend), son énergie coûte la moins chère de ses heures de charge à venir — pour une batterie dont le pilotage planifie à l'avance et a de la place (Predbat et similaires).",
+              "house_power": "Facultatif. Ce que consomme toute la maison, pour apprendre sa consommation par heure de la journée (quelles heures à venir ont du surplus solaire, combien de temps tient la batterie). Laissé vide, Roost le calcule à partir de la puissance réseau + solaire (+ batterie)."
+            }
+          }
+        }
+      },
+      "notify": {
+        "title": "Notifications",
+        "description": "Désactivées tant que vous ne choisissez pas leur destination. Roost signale alors quand le thermostat est injoignable ou non modifiable, quand sa vérification n'est plus réussie pendant qu'il pilote, ou quand l'apprentissage échoue — au plus toutes les 12 heures par type.",
+        "data": {
+          "notify_target": "Envoyer les notifications à",
+          "weekly_report": "Résumé hebdomadaire (lundi matin)"
+        },
+        "data_description": {
+          "notify_target": "Une entité ou un service de notification, p. ex. notify.mobile_app_mon_telephone. Laisser vide : pas de notifications.",
+          "weekly_report": "Électricité de chauffage, coût, économie, confort et origine de l'électricité de la pompe, la semaine dernière."
+        }
+      }
+    },
+    "error": {
+      "not_quatt": "Cet appareil n'a pas de capteurs de pompe à chaleur Quatt (état du CIC, puissance thermique et puissance absorbée).",
+      "comfort_below_min": "La température de confort doit être au moins le minimum de jour.",
+      "store_below_comfort": "Le stockage de chaleur doit permettre au moins la température de confort.",
+      "day_order": "Les heures de confort doivent finir après leur début.",
+      "weather_needed": "Choisissez une entité météo (sous Avancé).",
+      "lowest_above_comfort": "Le réglage le plus bas du thermostat ne doit pas dépasser la température de confort.",
+      "price_needed": "Choisissez un capteur de prix, ou un prix fixe."
+    },
+    "abort": {
+      "mode_set": "Le mode est réglé."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "setpoint": {
+        "name": "Consigne prévue"
+      },
+      "saving_next_24h": {
+        "name": "Économie prévue sur 24 h"
+      },
+      "saving_yesterday": {
+        "name": "Économie hier"
+      },
+      "saving_month": {
+        "name": "Économie ce mois-ci"
+      },
+      "cost_today": {
+        "name": "Coût de chauffage aujourd'hui"
+      },
+      "energy_today": {
+        "name": "Électricité de chauffage aujourd'hui"
+      },
+      "energy_value": {
+        "name": "Valeur de l'énergie maintenant"
+      },
+      "house_model": {
+        "name": "Erreur du modèle de la maison"
+      },
+      "heat_pump_model": {
+        "name": "Modèle de la pompe à chaleur"
+      },
+      "history_import": {
+        "name": "Import de l'historique",
+        "state": {
+          "not_yet": "Pas encore",
+          "importing": "Importation en cours",
+          "done": "Terminé",
+          "waiting": "En attente",
+          "failed": "Échec",
+          "no_heat_pump": "Aucune pompe à chaleur Quatt trouvée"
+        }
+      },
+      "import_progress": {
+        "name": "Progression de l'import de l'historique"
+      },
+      "plan_accuracy": {
+        "name": "Précision du plan"
+      },
+      "room_expected_6h": {
+        "name": "Pièce prévue dans 6 heures"
+      },
+      "heat_planned": {
+        "name": "Chaleur prévue cette heure"
+      },
+      "heating_curve": {
+        "name": "Conseil de courbe de chauffe"
+      }
+    },
+    "binary_sensor": {
+      "paused": {
+        "name": "En pause (changé à la main)"
+      },
+      "following": {
+        "name": "La pompe à chaleur suit le thermostat"
+      },
+      "ready": {
+        "name": "Prêt à piloter"
+      }
+    },
+    "select": {
+      "mode": {
+        "name": "Mode",
+        "state": {
+          "off": "Arrêt",
+          "shadow": "Observation (plan seulement)",
+          "active": "Actif"
+        }
+      }
+    },
+    "button": {
+      "learn_now": {
+        "name": "Apprendre maintenant"
+      },
+      "import_history": {
+        "name": "Importer l'historique des statistiques"
+      }
+    }
+  },
+  "config_subentries": {
+    "room": {
+      "initiate_flow": {
+        "user": "Ajouter une pièce"
+      },
+      "entry_type": "Pièce",
+      "step": {
+        "user": {
+          "title": "Pièce supplémentaire",
+          "description": "Une pièce que la pompe à chaleur chauffe aussi (radiateurs à l'étage, une chambre). Roost y maintient le minimum pendant ses heures et apprend comment elle refroidit et se réchauffe.",
+          "data": {
+            "name": "Nom",
+            "sensor": "Capteur de température",
+            "kind": "Type de pièce",
+            "minimum": "Minimum (facultatif)",
+            "hour_from": "De (facultatif)",
+            "hour_to": "Jusqu'à (facultatif)"
+          },
+          "data_description": {
+            "sensor": "Un capteur dans cette pièce : la mesure de la vanne du radiateur ou un capteur séparé.",
+            "kind": "Fixe le minimum et ses heures ; en dehors, la pièce peut être aussi fraîche qu'elle veut. Chambre 16 °C 19–23 h, chambre d'enfant 18 °C 7–21 h, bureau 19 °C 8–18 h, salle de bain 20 °C 6–9 h, autre 17 °C pendant les heures de confort.",
+            "minimum": "Laisser vide pour le minimum du type.",
+            "hour_from": "Laisser vide pour les heures du type."
+          }
+        },
+        "reconfigure": {
+          "title": "Pièce supplémentaire",
+          "description": "Une pièce que la pompe à chaleur chauffe aussi (radiateurs à l'étage, une chambre). Roost y maintient le minimum pendant ses heures et apprend comment elle refroidit et se réchauffe.",
+          "data": {
+            "name": "Nom",
+            "sensor": "Capteur de température",
+            "kind": "Type de pièce",
+            "minimum": "Minimum (facultatif)",
+            "hour_from": "De (facultatif)",
+            "hour_to": "Jusqu'à (facultatif)"
+          },
+          "data_description": {
+            "sensor": "Un capteur dans cette pièce : la mesure de la vanne du radiateur ou un capteur séparé.",
+            "kind": "Fixe le minimum et ses heures ; en dehors, la pièce peut être aussi fraîche qu'elle veut. Chambre 16 °C 19–23 h, chambre d'enfant 18 °C 7–21 h, bureau 19 °C 8–18 h, salle de bain 20 °C 6–9 h, autre 17 °C pendant les heures de confort.",
+            "minimum": "Laisser vide pour le minimum du type.",
+            "hour_from": "Laisser vide pour les heures du type."
+          }
+        }
+      },
+      "abort": {
+        "reconfigure_successful": "La pièce est modifiée."
+      }
+    }
+  },
+  "selector": {
+    "mode": {
+      "options": {
+        "off": "Arrêt",
+        "shadow": "Observation (plan seulement)",
+        "active": "Actif (pilote le thermostat)"
+      }
+    },
+    "room_kind": {
+      "options": {
+        "bedroom": "Chambre",
+        "kids": "Chambre d'enfant",
+        "study": "Bureau",
+        "bathroom": "Salle de bain",
+        "other": "Autre"
+      }
+    },
+    "emitter": {
+      "options": {
+        "floor": "Plancher chauffant",
+        "radiators": "Radiateurs",
+        "both": "Les deux"
+      }
+    },
+    "price_mode": {
+      "options": {
+        "sensor": "Dynamique (capteur de prix)",
+        "epex": "Dynamique, prix day-ahead intégrés (sans capteur)",
+        "fixed": "Prix fixe (contrat)"
+      }
+    },
+    "grid_sign": {
+      "options": {
+        "import_positive": "Le soutirage est positif",
+        "export_positive": "L'injection est positive"
+      }
+    },
+    "battery_use": {
+      "options": {
+        "house": "Garder la batterie pour la maison",
+        "cheaper": "Utiliser la batterie quand c'est moins cher"
+      }
+    },
+    "weather_source": {
+      "options": {
+        "open_meteo": "Open-Meteo (gratuit, avec rayonnement et vent)",
+        "entity": "Une entité météo"
+      }
+    }
+  },
+  "issues": {
+    "not_following": {
+      "title": "{name} : la pompe à chaleur ne suit pas le thermostat",
+      "description": "La pompe à chaleur chauffe depuis plus de 45 minutes alors que le thermostat ne demande pas de chaleur. Vérifiez que le thermostat est relié au CIC Quatt en OpenTherm et que rien d'autre (comme un boost) ne fait tourner la pompe ; sinon Roost ne peut pas la piloter."
+    },
+    "room_missing": {
+      "title": "{name} : pas de température de pièce",
+      "description": "Ni le capteur de pièce ni le thermostat n'a signalé de température depuis 30 minutes. Roost ne planifie pas sans elle."
+    },
+    "quatt_missing": {
+      "title": "{name} : pompe à chaleur Quatt introuvable",
+      "description": "Les capteurs de la pompe à chaleur Quatt (état du CIC, puissance thermique et puissance absorbée) ne sont pas disponibles. Vérifiez que l'intégration Quatt fonctionne."
+    },
+    "thermostat_schedule": {
+      "title": "{name} : le thermostat est aussi modifié par une programmation",
+      "description": "Des changements que Roost n'a pas faits reviennent chaque jour à la même heure : {times}. C'est une programmation dans le thermostat lui-même, ou une autre automatisation. Elle va à l'encontre de Roost : après chaque changement Roost se met en pause. Désactivez cette programmation (Roost planifie toute la journée) ou supprimez l'automatisation. Ces changements ne servent pas aux suggestions de confort."
+    },
+    "no_lever": {
+      "title": "{name} : la consigne fait à peine varier la pompe à chaleur",
+      "description": "Roost a appris qu'un changement du thermostat ne modifie la puissance de la pompe à chaleur que de {k} kW par °C. Le thermostat ne transmet probablement pas la consigne en OpenTherm, ou limite la température de l'eau. Roost continue de planifier, mais ne peut pas ainsi déplacer la chaleur vers des heures moins chères. Vérifiez les réglages OpenTherm du thermostat."
+    },
+    "room_cold": {
+      "title": "{name} : {room} reste trop froid",
+      "description": "Plusieurs des derniers jours, {room} est resté des heures sous son minimum de {minimum} °C ({hours}). L'eau est peut-être trop tiède pour ses radiateurs, ou la vanne est réglée bas. Vérifiez la vanne ; si elle est ouverte, autorisez une eau plus chaude : augmentez « Consigne au plus de ceci au-dessus de la pièce » dans les réglages de confort."
+    },
+    "thermostat_unavailable": {
+      "title": "{name} : le thermostat est injoignable",
+      "description": "Le thermostat est indisponible depuis un moment. Roost le laisse tranquille jusqu'à son retour, puis replanifie. Vérifiez le thermostat ou son intégration."
+    },
+    "set_failed": {
+      "title": "{name} : impossible de modifier le thermostat",
+      "description": "Roost a essayé plusieurs fois de suite de modifier le thermostat, sans succès : {error}. Vérifiez l'intégration du thermostat ; Roost continue d'essayer à son rythme habituel."
+    },
+    "learning_failed": {
+      "title": "{name} : l'apprentissage a échoué",
+      "description": "Roost n'a pas pu apprendre de l'historique cette fois. Il garde le modèle précédent. Le journal a les détails."
+    },
+    "ready_for_active": {
+      "title": "{name} : prêt à piloter la pompe à chaleur",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Passer en actif",
+            "description": "Roost a vérifié son plan sur les {days} derniers jours : avec les consignes réellement sur le thermostat, il prévoit la pièce à {rmse} °C près 6 heures à l'avance, sur {hours} heures de chauffe, et la pompe à chaleur suit le thermostat.\n\nValidez pour laisser Roost piloter le thermostat (mode actif). Vous pouvez revenir à l'observation à tout moment avec le sélecteur de mode de Roost."
+          }
+        }
+      }
+    },
+    "suggest_raise_comfort": {
+      "title": "{name} : un peu plus chaud le jour ?",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Relever la température de confort",
+            "description": "Ces deux dernières semaines, le thermostat a été monté à la main pendant les heures de confort {days} jours ({count} fois).\n\nValidez pour relever la température de confort de {current} à {value} °C. Ignorez ceci si c'était exceptionnel."
+          }
+        }
+      }
+    },
+    "suggest_lower_comfort": {
+      "title": "{name} : un peu plus frais le jour ?",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Abaisser la température de confort",
+            "description": "Ces deux dernières semaines, le thermostat a été baissé à la main pendant les heures de confort {days} jours ({count} fois).\n\nValidez pour abaisser la température de confort de {current} à {value} °C — cela économise aussi de l'énergie."
+          }
+        }
+      }
+    },
+    "suggest_earlier_day": {
+      "title": "{name} : commencer les heures de confort plus tôt ?",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Commencer les heures de confort plus tôt",
+            "description": "Ces deux dernières semaines, le thermostat a été monté à la main peu avant les heures de confort {days} jours ({count} fois).\n\nValidez pour commencer les heures de confort à {value} au lieu de {current}."
+          }
+        }
+      }
+    },
+    "suggest_later_day": {
+      "title": "{name} : terminer les heures de confort plus tard ?",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Terminer les heures de confort plus tard",
+            "description": "Ces deux dernières semaines, le thermostat a été monté à la main peu après les heures de confort {days} jours ({count} fois).\n\nValidez pour terminer les heures de confort à {value} au lieu de {current}."
+          }
+        }
+      }
+    },
+    "suggest_earlier_night": {
+      "title": "{name} : terminer les heures de confort plus tôt ?",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Terminer les heures de confort plus tôt",
+            "description": "Ces deux dernières semaines, le thermostat a été baissé à la main vers la fin des heures de confort {days} jours ({count} fois).\n\nValidez pour terminer les heures de confort à {value} au lieu de {current} — cela économise aussi de l'énergie."
+          }
+        }
+      }
+    }
+  },
+  "services": {
+    "pause": {
+      "name": "Pause",
+      "description": "Laisser le thermostat tranquille un moment.",
+      "fields": {
+        "hours": {
+          "name": "Heures"
+        }
+      }
+    },
+    "resume": {
+      "name": "Reprendre",
+      "description": "Terminer une pause et planifier à nouveau.",
+      "fields": {}
+    },
+    "away": {
+      "name": "Absent",
+      "description": "Personne à la maison jusqu'à un moment : seul le minimum d'absence compte, pas d'heures de confort ; Roost est de nouveau chaud à votre retour.",
+      "fields": {
+        "until": {
+          "name": "Jusqu'à"
+        },
+        "days": {
+          "name": "Jours (au lieu de jusqu'à)"
+        },
+        "minimum": {
+          "name": "Minimum pendant l'absence"
+        }
+      }
+    },
+    "home": {
+      "name": "De retour",
+      "description": "Terminer l'absence : les heures de confort comptent de nouveau.",
+      "fields": {}
+    },
+    "set_settings": {
+      "name": "Régler les températures et les heures de confort",
+      "description": "Les réglages de Roost (pas le thermostat), comme dans Configurer → Confort ; celui modifié l'emporte, les autres suivent.",
+      "fields": {
+        "comfort": {
+          "name": "Confort (jour)"
+        },
+        "day_min": {
+          "name": "Minimum le jour"
+        },
+        "night_min": {
+          "name": "Minimum la nuit"
+        },
+        "store_max": {
+          "name": "Stocker la chaleur jusqu'à"
+        },
+        "lowest_setpoint": {
+          "name": "Consigne la plus basse"
+        },
+        "day_from": {
+          "name": "Heures de confort à partir de"
+        },
+        "day_to": {
+          "name": "Heures de confort jusqu'à"
+        }
+      }
+    },
+    "import_history": {
+      "name": "Importer l'historique des statistiques",
+      "description": "Lire les heures de la pompe à chaleur dans les statistiques à long terme de Home Assistant pour les capteurs Quatt et en apprendre.",
+      "fields": {
+        "days": {
+          "name": "Jours"
+        }
+      }
+    },
+    "explain_saving": {
+      "name": "Expliquer l'économie",
+      "description": "D'où vient l'économie, heure par heure par rapport à un thermostat fixe à confort égal, pour hier (ou un jour de la semaine passée) ou les prochaines 24 heures, avec les changements du plan et leurs raisons.",
+      "fields": {
+        "day": {
+          "name": "Jour : yesterday, next_24h ou une date (AAAA-MM-JJ)"
+        }
+      }
+    }
+  }
+}

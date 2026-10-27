@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.1.0 — Roost for Quatt
+
+First version of the fork of Roost v0.7.7 for Quatt heat pumps.
+
+- Reads the Quatt integration (home-assistant-quatt) instead of Weheat: the CIC's state, heat power, power input, flow temperatures and the OpenTherm thermostat's values, found by their keys.
+- The heat pump's history comes from Home Assistant's long-term statistics of those sensors (no login, nothing leaves Home Assistant); seconds of heating per hour are estimated from them and counted live from the CIC's state from then on.
+- Starting profiles for one Quatt outdoor unit and for a Quatt Duo.
+- Electricity per hour and per day from the power input (a Quatt has no energy meter), while heating only: the units' standby (~10 W) is measured and left out, as a heat pump's own meter for heating does.
+- A CIC that asks for a boiler which gives no heat (removed, or never there) does not make Roost treat it as a hybrid.
+- Domain `roost_quatt`, card `custom:roost-quatt-card`, services `roost_quatt.*`.
+
+_Below: the history of Roost itself._
+
 ## v0.7.7 — a thermostat in half degrees, the correction from hours without sun
 
 **For everyone whose room temperature comes from the thermostat (no room sensor), and for better forecasts for everyone** — many thermostats show the room in half degrees. Roost took that rounding for an open window and for free heat, and then hardly heated. The correction from the last hours now only learns from hours without sun, which makes the forecasts a few hours ahead better.

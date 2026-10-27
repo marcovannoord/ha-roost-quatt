@@ -1,6 +1,6 @@
 name: Release
 
-# Push a tag like v0.5.2 and this publishes the GitHub release, with the notes from CHANGELOG.md and roost.zip (the
+# Push a tag like v0.5.2 and this publishes the GitHub release, with the notes from CHANGELOG.md and roost_quatt.zip (the
 # integration folder, for installing by hand). The beta (0.x, and versions like 1.0.0b1) is published as a pre-release;
 # HACS only offers those to who turned on "Show beta versions" for Roost.
 # It refuses when the tag does not match the version in manifest.json or the changelog has no section for it.
@@ -30,7 +30,7 @@ jobs:
         run: |
           tag="${{ inputs.tag || github.ref_name }}"
           echo "tag=${tag}" >> "$GITHUB_OUTPUT"
-          version="$(python3 -c 'import json;print(json.load(open("custom_components/roost/manifest.json"))["version"])')"
+          version="$(python3 -c 'import json;print(json.load(open("custom_components/roost_quatt/manifest.json"))["version"])')"
           if [ "v${version}" != "${tag}" ]; then
             echo "::error::Tag ${tag} does not match manifest.json version ${version}"; exit 1
           fi
@@ -40,7 +40,7 @@ jobs:
           # the beta (0.x) as pre-releases: HACS offers them to who turned on "Show beta versions" for Roost
           case "${version}" in 0.*|*[ab]*|*rc*) echo "pre=--prerelease" >> "$GITHUB_OUTPUT" ;; *) echo "pre=--latest" >> "$GITHUB_OUTPUT" ;; esac
       - name: Zip the integration
-        run: cd custom_components/roost && zip -r -q "${GITHUB_WORKSPACE}/roost.zip" . -x "__pycache__/*"
+        run: cd custom_components/roost_quatt && zip -r -q "${GITHUB_WORKSPACE}/roost_quatt.zip" . -x "__pycache__/*"
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
@@ -51,10 +51,10 @@ jobs:
           if gh release view "${TAG}" > /dev/null 2>&1; then
             if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
               gh release edit "${TAG}" --title "${TITLE}" --notes-file body.md
-              gh release upload "${TAG}" roost.zip --clobber
+              gh release upload "${TAG}" roost_quatt.zip --clobber
             else
               echo "Release ${TAG} exists already, leaving it"
             fi
           else
-            gh release create "${TAG}" --title "${TITLE}" --notes-file body.md ${PRE} roost.zip
+            gh release create "${TAG}" --title "${TITLE}" --notes-file body.md ${PRE} roost_quatt.zip
           fi

@@ -20,7 +20,7 @@ HOUSE = model.HouseModel(C=19.0, H=0.125, g=5.5, lag=1.0, internal=-0.05, Hw=0.0
 
 def simulate(hp, days=30, seed=5, house=HOUSE):
     """Hourly rows of a house driven by a thermostat with the given response: day 20.5 °C, night 19 °C, and now and
-    then a different setpoint, as someone (or a planner) would set. Rows hold hourly means, like the Weheat logs."""
+    then a different setpoint, as someone (or a planner) would set. Rows hold hourly means, like the heat pump's hours."""
     rnd = random.Random(seed)
     sim = planner.Simulator(house, hp, planner.Settings())
     rows, T, E, w = [], 20.0, 0.0, 1.0
@@ -301,12 +301,11 @@ def test_steady_comparison_is_exactly_as_comfortable():
     assert abs(sum(r["save"] for r in bd["hours"]) + bd["b_end"] - bd["end"] - bd["saving"]) < 0.01
 
 
-def test_import_end_expected_sooner_with_logs_only():
-    """Adding fields reads only the hourly logs (once per two minutes), not the energy logs (once per half hour)."""
+def test_import_end_expected_from_the_months_left():
+    """The import reads Home Assistant's own statistics: seconds per month."""
     imp = {"months": 12, "months_done": 2, "at": "2026-10-20T09:45:00+00:00"}
     at = datetime(2026, 10, 20, 9, 45, tzinfo=timezone.utc).timestamp()
-    assert check.import_done_at(imp, at) == at + 10 * 1800
-    assert check.import_done_at(imp, at, logs_only=True) == at + 10 * 150
+    assert check.import_done_at(imp, at) == at + 10 * check.ETA_MONTH_S
 
 
 if __name__ == "__main__":

@@ -1,0 +1,25 @@
+{
+  "domain": "roost_quatt",
+  "name": "Roost for Quatt",
+  "after_dependencies": [
+    "quatt",
+    "weather"
+  ],
+  "codeowners": [
+    "@marcovannoord"
+  ],
+  "config_flow": true,
+  "dependencies": [
+    "recorder",
+    "http",
+    "frontend",
+    "lovelace",
+    "websocket_api"
+  ],
+  "documentation": "https://github.com/marcovannoord/ha-roost",
+  "integration_type": "service",
+  "iot_class": "calculated",
+  "issue_tracker": "https://github.com/marcovannoord/ha-roost/issues",
+  "requirements": [],
+  "version": "0.1.0"
+}

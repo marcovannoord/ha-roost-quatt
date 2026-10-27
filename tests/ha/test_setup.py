@@ -6,7 +6,7 @@ import time
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import Context, HomeAssistant
 
-from custom_components.roost.diagnostics import async_get_config_entry_diagnostics
+from custom_components.roost_quatt.diagnostics import async_get_config_entry_diagnostics
 
 from .conftest import THERMOSTAT, setup_roost, thermostat
 
@@ -15,11 +15,12 @@ def _plan_entity(hass: HomeAssistant) -> str:
     return next(s.entity_id for s in hass.states.async_all("sensor") if s.entity_id.endswith("planned_setpoint"))
 
 
-async def test_setup_finds_the_weheat_sensors_and_plans(hass: HomeAssistant, entry) -> None:
+async def test_setup_finds_the_quatt_sensors_and_plans(hass: HomeAssistant, entry) -> None:
     assert entry.state is ConfigEntryState.LOADED
     m = entry.runtime_data
-    assert {"state", "heat", "elec", "outdoor", "water_setpoint"} <= set(m.ent)
-    assert m.pump.source.startswith("profile p80")
+    assert {"state", "power_out", "power_in", "outdoor", "water_setpoint", "water_out", "power_in_hp2"} <= set(m.ent)
+    assert m.pump_name == "Quatt Duo" and m.pump.source.startswith("profile quatt_duo")
+    assert m.ent["water_out"].endswith("heatpump_2_hp2_temperaturewaterout")      # the Duo's second unit feeds the house
     st = hass.states.get(_plan_entity(hass))
     assert st is not None and st.state not in ("unknown", "unavailable")
     assert len(st.attributes["plan"]) == 24
@@ -56,7 +57,7 @@ async def test_manual_change_pauses(hass: HomeAssistant, entry, climate_calls) -
 
 async def test_diagnostics_and_unload(hass: HomeAssistant, entry) -> None:
     d = await async_get_config_entry_diagnostics(hass, entry)
-    assert d["mode"] == "shadow" and d["plan"] and d["weheat_entities"]
+    assert d["mode"] == "shadow" and d["plan"] and d["quatt_entities"]
     assert await hass.config_entries.async_unload(entry.entry_id)
     assert entry.state is ConfigEntryState.NOT_LOADED
 
@@ -72,18 +73,17 @@ async def test_the_plan_inputs_are_kept_for_a_replay(hass: HomeAssistant, entry)
     assert snap["sp"] == [h.sp for h in m.plan.hours]
 
 
-async def test_without_a_weheat_login_it_asks_for_one(hass: HomeAssistant, entry) -> None:
-    """Installed without a Weheat login (or from before 0.5.3): Home Assistant shows the re-authenticate notice."""
-    flows = hass.config_entries.flow.async_progress_by_handler("roost")
-    assert any(f["context"]["source"] == "reauth" for f in flows), flows
+async def test_no_login_is_asked(hass: HomeAssistant, entry) -> None:
+    """Roost for Quatt reads the Quatt integration's entities: no re-authenticate notice."""
+    assert not hass.config_entries.flow.async_progress_by_handler("roost_quatt")
 
 
-async def test_built_in_day_ahead_prices(hass: HomeAssistant, weheat: str, aioclient_mock, climate_calls) -> None:
+async def test_built_in_day_ahead_prices(hass: HomeAssistant, quatt: str, aioclient_mock, climate_calls) -> None:
     """Price mode 'epex': Roost fetches the day-ahead prices itself and plans with day-ahead × multiplier + amount."""
     from homeassistant.setup import async_setup_component
     from homeassistant.util import dt as dt_util
 
-    from custom_components.roost import epex
+    from custom_components.roost_quatt import epex
 
     from .conftest import setup_roost
 
@@ -92,7 +92,7 @@ async def test_built_in_day_ahead_prices(hass: HomeAssistant, weheat: str, aiocl
     aioclient_mock.get(epex.URL, json={"unix_seconds": [t0 + q * 900 for q in quarters],
                                        "price": [100.0 if (q // 4) % 2 else 300.0 for q in quarters], "unit": "EUR / MWh"})
     assert await async_setup_component(hass, "websocket_api", {})
-    entry = await setup_roost(hass, weheat, options={"price_mode": "epex", "epex_zone": "NL", "import_mult": 1.21,
+    entry = await setup_roost(hass, quatt, options={"price_mode": "epex", "epex_zone": "NL", "import_mult": 1.21,
                                                      "import_add": 0.15})
     m = entry.runtime_data
     assert aioclient_mock.call_count == 1 and m.sources.get("epex") == "ok"
@@ -104,7 +104,7 @@ async def test_built_in_day_ahead_prices(hass: HomeAssistant, weheat: str, aiocl
 async def test_look_back_over_the_websocket(hass: HomeAssistant, entry) -> None:
     """The card's look back: roost/history for the planned-setpoint entity gives the hours, events and days. (The
     handler is called with a stand-in connection: the web server is a mock in these tests.)"""
-    from custom_components.roost import _ws_history
+    from custom_components.roost_quatt import _ws_history
 
     class Conn:
         def __init__(self) -> None:
@@ -162,16 +162,16 @@ async def test_today_survives_a_restart(hass: HomeAssistant, entry) -> None:
     assert m._cost_day == dt_util.now().date().isoformat() and m.cost_today == 0.0
 
 
-async def test_house_use_from_grid_and_solar(hass: HomeAssistant, weheat: str) -> None:
+async def test_house_use_from_grid_and_solar(hass: HomeAssistant, quatt: str) -> None:
     """No sensor for the house: the usage profile comes from the grid meter and solar."""
     from datetime import timedelta
     from unittest.mock import patch
 
     from homeassistant.util import dt as dt_util
 
-    from custom_components.roost import learning
+    from custom_components.roost_quatt import learning
 
-    entry = await setup_roost(hass, weheat, {"has_solar": True, "grid_power": "sensor.grid", "pv_power": "sensor.pv"})
+    entry = await setup_roost(hass, quatt, {"has_solar": True, "grid_power": "sensor.grid", "pv_power": "sensor.pv"})
     hass.states.async_set("sensor.grid", "0", {"unit_of_measurement": "W"})
     hass.states.async_set("sensor.pv", "0", {"unit_of_measurement": "kW"})
     end = dt_util.utcnow().replace(minute=0, second=0, microsecond=0)
@@ -196,20 +196,19 @@ async def test_every_plan_hour_has_a_reason(hass: HomeAssistant, entry) -> None:
 
 
 async def test_heating_curve_advice_sensor(hass: HomeAssistant, entry) -> None:
-    """The advice and the unit's own curve (when Weheat gives the installation's settings) on their sensor."""
-    from custom_components.roost import curve
+    """The advice on its sensor."""
+    from custom_components.roost_quatt import curve
 
     m = entry.runtime_data
     m.curve_advice = curve.CurveAdvice(points=[[-20.0, 46.0, None], [9.0, 30.5, 31.5], [15.0, None, 31.9], [20.0, None, None],
                                                [25.0, None, None]], room=21.0, ua_kw=0.167, base_kw=-0.41, margin_kw=0.8,
                                        k_kw=0.209, n=1.1, cycling_from=8.0, days=142, hours=1880, out_min=-1.3, out_max=11.9,
                                        reliable=True, extrapolated=[-20.0])
-    m.weheat_settings = {"available": True, "control": "opentherm_smart", "curve": [[-20.0, 39.0], [9.0, 30.0]]}
     m._notify()
     await hass.async_block_till_done()
     st = next(s for s in hass.states.async_all("sensor") if s.entity_id.endswith("heating_curve_advice"))
     assert abs(float(st.state) - (46.0 + (30.5 - 46.0) * 20 / 29)) < 0.1            # 0 °C on the line from −20 to 9
-    assert st.attributes["control"] == "opentherm_smart" and st.attributes["points"][1][2] == 31.5
+    assert st.attributes["control"] == "opentherm" and st.attributes["points"][1][2] == 31.5
     assert st.attributes["cycling_from"] == 8.0 and st.attributes["heat_loss_w_per_k"] == 167
 
 
@@ -231,14 +230,14 @@ async def test_explain_saving_service(hass: HomeAssistant, entry) -> None:
     from homeassistant.exceptions import ServiceValidationError
 
     m = entry.runtime_data
-    r = await hass.services.async_call("roost", "explain_saving", {"day": "next_24h"}, blocking=True, return_response=True)
+    r = await hass.services.async_call("roost_quatt", "explain_saving", {"day": "next_24h"}, blocking=True, return_response=True)
     assert r["available"] and len(r["hours"]) == 24
     assert abs(sum(h["save"] for h in r["hours"]) + r["b_end"] - r["end"] - r["saving"]) < 0.02
     assert {"sp", "t", "kwh", "cost", "b_sp", "b_t", "b_kwh", "b_cost", "ts"} <= set(r["hours"][0])
-    r = await hass.services.async_call("roost", "explain_saving", {}, blocking=True, return_response=True)
+    r = await hass.services.async_call("roost_quatt", "explain_saving", {}, blocking=True, return_response=True)
     assert r["available"] is False and "plan_changes" in r                 # no day replayed yet
     with pytest.raises(ServiceValidationError):
-        await hass.services.async_call("roost", "explain_saving", {"day": "last tuesday"}, blocking=True, return_response=True)
+        await hass.services.async_call("roost_quatt", "explain_saving", {"day": "last tuesday"}, blocking=True, return_response=True)
     # the plan in force expected another setpoint now: the next plan logs the change
     snap = dict(m._plan_snap)
     m._plan_snap = {**snap, "sp": [x + 1.0 for x in snap["sp"]], "saving": snap["saving"] + 0.5}
@@ -253,7 +252,7 @@ async def test_settings_from_the_card_do_not_reload(hass: HomeAssistant, entry) 
     """21-10: a temperature changed in the card (roost.set_settings) reloaded Roost, and the card showed 'not
     available' for a moment: the update listener ran within async_update_entry and saw the old settings key."""
     m = entry.runtime_data
-    await hass.services.async_call("roost", "set_settings", {"comfort": 21.0}, blocking=True)
+    await hass.services.async_call("roost_quatt", "set_settings", {"comfort": 21.0}, blocking=True)
     await hass.async_block_till_done()
     assert entry.runtime_data is m                                  # the same manager: no reload
     assert {**entry.data, **entry.options}["comfort"] == 21.0 and m.settings().comfort == 21.0
@@ -267,7 +266,7 @@ async def test_an_update_replays_the_days_kept(hass: HomeAssistant, entry) -> No
 
     from homeassistant.util import dt as dt_util
 
-    from custom_components.roost import planner
+    from custom_components.roost_quatt import planner
 
     m = entry.runtime_data
     start = dt_util.start_of_local_day(dt_util.now() - timedelta(days=1))
