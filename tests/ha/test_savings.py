@@ -47,8 +47,9 @@ async def test_cost_uses_current_hour_before_replanning(entry):
     m.plan_at = now.timestamp() - 120
     m.plan_hours = [planner.HourIn(5, 3.5, 0, 0.1, 0.1), planner.HourIn(5, 3.5, 0, 0.7, 0.7)]
     m._cost_day = dt_util.as_local(now).date().isoformat()
-    m._last_elec, m.cost_today = 10.0, 0.0
-    with patch.object(m, "_num", side_effect=[11.0, 0.0]):
+    m.cost_today = 0.0
+    m._last_tick = now.timestamp() - 600             # a Quatt has no meter: 6 kW for 10 minutes is 1 kWh
+    with patch.object(type(m), "pump_state", return_value="heating"), patch.object(m, "_kw", return_value=6.0):
         m._count_cost(now)
     assert abs(m.cost_today - 0.7) < 1e-9
 
