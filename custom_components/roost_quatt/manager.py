@@ -149,6 +149,8 @@ class RoostManager(PricesMixin, QuattMixin, HourLogMixin, HealthMixin, CareMixin
         self.house = model.HouseModel.from_dict(data.get("house"))
         if data.get("pump"):
             self.pump = heatpump.HeatPumpModel.from_dict(data.get("pump"), prof)
+            if heatpump.reset_old_pmax(self.pump, prof):
+                self.event("pmax_reset", profile=prof)     # an earlier, too high starting line: learning raises it again
         else:
             self.pump = heatpump.HeatPumpModel.for_profile(prof)
             self.pump.alpha = round(self.pump.alpha + heatpump.EMITTER_COP.get(self.conf.get(CONF_EMITTER, "floor"), 0.0), 3)

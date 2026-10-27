@@ -29,11 +29,29 @@ PROFILES = {
     "p80": {"alpha": 3.04, "beta": 0.19, "gamma": -0.27, "pmax_a": 5.7, "pmax_b": 0.15, "pmax_lo": 5.3, "pmax_hi": 7.0},
     "p60": {"alpha": 3.04, "beta": 0.19, "gamma": -0.35, "pmax_a": 4.3, "pmax_b": 0.11, "pmax_lo": 4.0, "pmax_hi": 5.3},
     "generic": {"alpha": 3.0, "beta": 0.18, "gamma": -0.3, "pmax_a": 4.5, "pmax_b": 0.12, "pmax_lo": 3.5, "pmax_hi": 7.0},
-    # Quatt (R290, rough starting values): one outdoor unit, and a Duo (two units in series: twice the output, and
-    # the COP drops less at high output because each unit runs at half load)
-    "quatt": {"alpha": 3.2, "beta": 0.17, "gamma": -0.3, "pmax_a": 4.6, "pmax_b": 0.1, "pmax_lo": 3.5, "pmax_hi": 5.5},
-    "quatt_duo": {"alpha": 3.2, "beta": 0.17, "gamma": -0.15, "pmax_a": 9.2, "pmax_b": 0.2, "pmax_lo": 7.0, "pmax_hi": 11.0},
+    # Quatt (R290): one outdoor unit, and a Duo (two units in series; the COP drops less at high output because each unit
+    # runs at part load). The maximum output starts low on purpose: learning only ever raises it, from whole hours the
+    # unit gave more (a Duo measured 6.4-6.7 kW at -4..4 °C; a single unit about half)
+    "quatt": {"alpha": 3.2, "beta": 0.17, "gamma": -0.3, "pmax_a": 3.0, "pmax_b": 0.03, "pmax_lo": 2.6, "pmax_hi": 4.5},
+    "quatt_duo": {"alpha": 3.2, "beta": 0.17, "gamma": -0.15, "pmax_a": 5.8, "pmax_b": 0.05, "pmax_lo": 5.3, "pmax_hi": 8.0},
 }
+
+# maximum output lines of earlier starting profiles that were too high and could never come down (raise-only learning):
+# a model still on one of them starts again from the profile above
+OLD_PMAX = {"quatt": (4.6, 0.1, 3.5, 5.5), "quatt_duo": (9.2, 0.2, 7.0, 11.0)}
+
+
+PMAX_KEYS = ("pmax_a", "pmax_b", "pmax_lo", "pmax_hi")
+
+
+def reset_old_pmax(m: "HeatPumpModel", profile: str) -> bool:
+    """The model's maximum output is still an outdated starting line: take the current profile's. True when changed."""
+    old = OLD_PMAX.get(profile)
+    if old is None or tuple(getattr(m, k) for k in PMAX_KEYS) != old:
+        return False
+    for k in PMAX_KEYS:
+        setattr(m, k, PROFILES[profile][k])
+    return True
 
 
 # radiators need warmer water than a floor: a lower COP to start from (the unit's own meters take over)

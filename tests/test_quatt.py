@@ -135,3 +135,38 @@ def test_live_hour_counts_seconds():
 
 if __name__ == "__main__":
     run_all(dict(globals()))
+
+
+def test_duo_maximum_starts_low_and_is_learned_up():
+    """The Duo's starting line is below what a Duo gives (learning only raises it); whole hours at 6.3-6.6 kW around
+    0 °C (as measured on a Duo) lift it there."""
+    model = load("model")
+    m = heatpump.HeatPumpModel.for_profile("quatt_duo")
+    assert m.pmax(0.0) < 6.0
+    rows = [model.HourRow(ts=1768471200 + i * 3600, T=20.0, T_out=-1.0 + (i % 5), Q=6.3 + 0.1 * (i % 4), E=1.6,
+                          T_out_sensor=-1.0 + (i % 5), heating_s=3600.0) for i in range(40)]
+    learned, note = heatpump.learn(rows, m)
+    assert 6.3 <= learned.pmax(0.0) <= 6.8 and "maximum output raised" in note
+
+
+def test_an_outdated_too_high_maximum_is_reset():
+    old = heatpump.HeatPumpModel.for_profile("quatt_duo")
+    old.pmax_a, old.pmax_b, old.pmax_lo, old.pmax_hi = 9.2, 0.2, 7.0, 11.0      # the first, guessed Duo line
+    assert heatpump.reset_old_pmax(old, "quatt_duo") and old.pmax(0.0) < 6.0
+    learned = heatpump.HeatPumpModel.for_profile("quatt_duo")
+    learned.pmax_a = 6.55                                                       # raised by learning: kept
+    assert not heatpump.reset_old_pmax(learned, "quatt_duo") and learned.pmax_a == 6.55
+    assert not heatpump.reset_old_pmax(heatpump.HeatPumpModel.for_profile("p80"), "p80")
+
+
+def test_every_role_the_code_reads_is_a_quatt_role():
+    """After merging Roost from upstream (written for Weheat): a heat pump role the code reads that the Quatt mapping
+    does not have would quietly be None. This fails instead, so the merge gets a Quatt key for it (or a decision)."""
+    import glob
+    import re
+    src = os.path.join(os.path.dirname(__file__), "..", "custom_components", "roost_quatt", "*.py")
+    used = set()
+    for path in glob.glob(src):
+        text = open(path, encoding="utf-8").read()
+        used |= set(re.findall(r"\bent\.get\(\"([a-z0-9_]+)\"\)", text)) | set(re.findall(r"\bent\[\"([a-z0-9_]+)\"\]", text))
+    assert used and used <= set(quatt.QUATT), sorted(used - set(quatt.QUATT))
