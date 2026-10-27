@@ -123,7 +123,7 @@ class QuattMixin:
             first = min(self._pump_hours) if self._pump_hours else None
             info = self.import_info
             self.event("import", hours=info["hours"], months=info["months_done"])
-            self.import_info = {"status": "done", "done": True, "hours": info["hours"], "months": info["months_done"],
+            self.import_info = {"status": "done", "done": True, "version": quatt.IMPORT_VERSION, "hours": info["hours"], "months": info["months_done"],
                                 "from": first and datetime.fromtimestamp(first, tz=timezone.utc).isoformat(),
                                 "to": info["to"], "at": dt_util.now().isoformat(timespec="seconds")}
         except Exception as err:  # noqa: BLE001

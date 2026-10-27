@@ -230,6 +230,9 @@ class RoostManager(PricesMixin, QuattMixin, HourLogMixin, HealthMixin, CareMixin
         await self._async_tick(None, force_plan=True)
         if self.conf.get(CONF_IMPORT_ON_SETUP) and not self.import_info.get("done"):
             self.spawn(self.async_import(IMPORT_DAYS), "import from the statistics")
+        elif self.import_info.get("done") and self.import_info.get("version", 1) < quatt.IMPORT_VERSION:
+            # imported by an older version that read the statistics differently: read them again (seconds)
+            self.spawn(self.async_import(IMPORT_DAYS), "import from the statistics (newer version)")
         elif self.house.source != "learned":
             self.spawn(self.async_learn(), "first learning")
 
