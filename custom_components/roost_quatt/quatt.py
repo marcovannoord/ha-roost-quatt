@@ -228,6 +228,15 @@ class LiveHour:
         self.boiler_s = 0.0
         self.seen_s = 0.0
 
+    def state(self) -> list:
+        """The hour in progress, saved so a restart within it goes on counting (see manager._acc_state)."""
+        return [self.hour, round(self.heating_s), round(self.boiler_s), round(self.seen_s)]
+
+    def restore(self, d: list | None) -> None:
+        if not d or len(d) != 4 or d[0] is None:
+            return
+        self.hour, self.heating_s, self.boiler_s, self.seen_s = int(d[0]), float(d[1]), float(d[2]), float(d[3])
+
     def feed(self, t: float, dt: float, state: str | None) -> tuple[int, dict] | None:
         """One tick: dt seconds in `state`. Returns (hour ts, fields) when an hour closed with most of it seen."""
         hour = int(t // 3600 * 3600)

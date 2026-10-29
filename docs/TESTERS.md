@@ -38,6 +38,9 @@ unzip it into `custom_components/roost` in your Home Assistant configuration fol
   account.
 - Updating to 0.6.0: Roost reads the past year of hourly logs from Weheat once more, in the background (about half an
   hour); the heating curve advice appears after that.
+- Updating to 0.8.0: savings of the days before the update are no longer counted (they were not checked against what
+  was measured), so this month's saving starts again; the next 24 hours' saving is empty in the morning until
+  tomorrow's prices are published. The nightly learning refits how the heat pump responds.
 
 ## What I would like to hear
 
@@ -49,6 +52,9 @@ unzip it into `custom_components/roost` in your Home Assistant configuration fol
 - **Your setup**: thermostat (OpenTherm or on/off), dynamic or fixed price, solar or battery — it helps to know which
   combinations were tested.
 - **The heating curve advice** (*Curve* in the card): does it look right for your house, and what is your curve now?
+- **Since 0.8.0**: does the heat pump run in fewer, longer runs (the card shows starts and run length today against
+  yesterday)? Does the room stay where you want it? And the days in the savings calendar that are not counted: what
+  reason does the card give?
 
 ## Stopping
 

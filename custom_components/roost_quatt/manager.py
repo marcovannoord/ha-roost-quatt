@@ -82,6 +82,7 @@ class RoostManager(PricesMixin, QuattMixin, HourLogMixin, HealthMixin, CareMixin
         self._weather_at = 0.0
         self._pump_hours: dict[int, dict] = {}      # the unit's hours: from the statistics, and counted live
         self._live = quatt.LiveHour()
+        self._last_elec: float | None = None        # a meter reading (Weheat); a Quatt has no meter: it stays None
         self.live_hours: dict[int, dict] = {}       # seconds per state Roost counted itself, the last days (quatt.LIVE_KEEP_DAYS)
         self._weather_hist: dict[int, tuple] = {}
         self._planning = False
@@ -115,6 +116,7 @@ class RoostManager(PricesMixin, QuattMixin, HourLogMixin, HealthMixin, CareMixin
         self._heat_acc = 0.0
         self._elec_acc = 0.0                        # heating electricity in this hour (kWh) and its cost
         self._cost_acc = 0.0
+        self._obs_acc = 0.0                         # seconds of this hour Roost saw (a restart: fewer)
         # per hour: mean room setpoint and the thermostat's own reading, from the thermostat entity (an on/off thermostat
         # may not pass its setpoint on; HA statistics keep no attributes)
         self.sp_hist: dict[int, list] = {}
@@ -166,6 +168,7 @@ class RoostManager(PricesMixin, QuattMixin, HourLogMixin, HealthMixin, CareMixin
             self.pump.alpha = round(self.pump.alpha + heatpump.EMITTER_COP.get(self.conf.get(CONF_EMITTER, "floor"), 0.0), 3)
         self.mem = control.ControlMemory.from_dict(data.get("control"))
         self.storage_e = float(data.get("storage_e", 0.0))
+        self._age_storage(data.get("storage_at"), time.time())
         self.learn_info = data.get("learn", {})
         self.import_info = data.get("import", {})
         self.hour_log = data.get("hour_log", [])
@@ -179,6 +182,7 @@ class RoostManager(PricesMixin, QuattMixin, HourLogMixin, HealthMixin, CareMixin
         self.plan_changes = data.get("plan_changes") or []
         self._plan_snap = data.get("plan_snap")
         self.commit = stick.Commitment.from_dict(data.get("commit"))
+        self._restore_acc(data.get("acc"), time.time())
         self.runs = [r for r in (data.get("runs") or []) if isinstance(r, list) and len(r) == 2]
         if self.runs and self.runs[-1][1] is None:
             self._heating_since = self.runs[-1][0]  # a run that went on over the restart
@@ -307,7 +311,8 @@ class RoostManager(PricesMixin, QuattMixin, HourLogMixin, HealthMixin, CareMixin
             "saving_detail": dict(sorted(self.saving_detail.items())[-SAVING_DETAIL_DAYS:]),
             "day_contexts": dict(sorted(self.day_contexts.items())[-SAVING_DETAIL_DAYS - 1:]),
             "plan_changes": replan.prune(self.plan_changes, time.time()), "plan_snap": self._plan_snap,
-            "commit": self.commit.as_dict() if self.commit else None, "runs": self.runs,
+            "commit": self.commit.as_dict() if self.commit else None, "runs": self.runs, "acc": self._acc_state(),
+            "storage_at": time.time(),
             "pv_k": self.pv_k, "load_profile": self.load_profile, "battery": self.battery.as_dict(), "price_seen": self._price_seen_recent(),
             "today": {"day": self._cost_day, "cost": round(self.cost_today, 4), "kwh": round(self.kwh_today, 3)},
             "check": self.check, "changes": [c for c in self.changes if c["ts"] > time.time() - 30 * 86400],
@@ -419,20 +424,37 @@ class RoostManager(PricesMixin, QuattMixin, HourLogMixin, HealthMixin, CareMixin
             resp = await self.hass.services.async_call("weather", "get_forecasts", {ATTR_ENTITY_ID: eid, "type": "hourly"},
                                                        blocking=True, return_response=True)
             out = {}
+            # the weather entity's own units (R12): a forecast in °F or a wind in m/s or mph is not in Home Assistant's units
+            st = self.hass.states.get(eid)
+            t_unit = st.attributes.get("temperature_unit") if st else None
+            w_unit = st.attributes.get("wind_speed_unit") if st else None
             for x in (resp or {}).get(eid, {}).get("forecast", []):
                 ts = series.to_ts(x.get("datetime"))
-                t = self._sys_to_c(_f(x.get("temperature")))
+                t = self._unit_to(_f(x.get("temperature")), t_unit, "temperature") if t_unit else self._sys_to_c(_f(x.get("temperature")))
                 if ts is None or t is None:
                     continue
                 ts = int(ts - ts % 3600)
                 cloud = _f(x.get("cloud_coverage"))
                 wind = _f(x.get("wind_speed"))
-                out[ts] = (t, self._clear_sky(ts) * (1 - 0.75 * ((cloud or 0) / 100) ** 3.4), (wind / 3.6) if wind is not None else None)
+                wind = self._unit_to(wind, w_unit, "speed") if w_unit else ((wind / 3.6) if wind is not None else None)
+                out[ts] = (t, self._clear_sky(ts) * (1 - 0.75 * ((cloud or 0) / 100) ** 3.4), wind)
             self._weather.update(out)
             self._weather_at = time.time()
             self.sources["weather"] = eid
         except Exception as err:  # noqa: BLE001
             self.sources["weather"] = f"{eid} unavailable: {err}"
+
+    @staticmethod
+    def _unit_to(v: float | None, unit: str, kind: str) -> float | None:
+        """A value in a source's own unit to °C or m/s (Home Assistant's converters); an unknown unit: not used."""
+        if v is None:
+            return None
+        from homeassistant.util.unit_conversion import SpeedConverter, TemperatureConverter
+        conv, to = (TemperatureConverter, "°C") if kind == "temperature" else (SpeedConverter, "m/s")
+        try:
+            return conv.convert(v, unit, to)
+        except Exception:  # noqa: BLE001 - a unit Home Assistant does not know
+            return None
 
     def _clear_sky(self, ts: float) -> float:
         import math
@@ -544,6 +566,19 @@ class RoostManager(PricesMixin, QuattMixin, HourLogMixin, HealthMixin, CareMixin
             self.event("error", where="run", error=repr(err)[:200], trace=traceback.format_exc(limit=4)[-800:])
         self._last_tick = t
         self._notify()
+
+    def _age_storage(self, saved_at: float | None, t: float) -> None:
+        """Heat in the floor after Home Assistant was down (R19): it went on being released to the room meanwhile.
+        Whether the unit heated is not known, so this is the lower estimate; a short restart changes nearly nothing."""
+        if not saved_at or t <= saved_at:
+            return
+        hours = min(12.0, (t - saved_at) / 3600)
+        lag = max(0.0, self.house.lag)
+        keep = (lag / (1 + lag)) ** hours if lag > 0 else 0.0
+        before = self.storage_e
+        self.storage_e = max(0.0, self.storage_e * keep)
+        if hours >= 0.25 and before - self.storage_e >= 0.05:
+            self.event("storage_aged", hours=round(hours, 2), before=round(before, 2), after=round(self.storage_e, 2))
 
     def _track_storage(self, t: float) -> None:
         """Heat in the floor/water: + heat the pump delivers for space heating, − the learned release to the room."""
@@ -876,8 +911,10 @@ class RoostManager(PricesMixin, QuattMixin, HourLogMixin, HealthMixin, CareMixin
         a, b = _f(old.attributes.get("temperature")), _f(new.attributes.get("temperature"))
         if a is None or b is None or abs(a - b) < 0.05:
             return
-        if self.mem.last_write and time.time() - self.mem.last_write < 60:
-            return                                   # our own change coming back
+        # our own change coming back (a thermostat may report it without our context); a change that carries a user
+        # is that user's, also right after ours (R20)
+        if self.mem.last_write and time.time() - self.mem.last_write < 60 and not event.context.user_id:
+            return
         self.mem.pause_until = time.time() + self.control_settings().pause_hours * 3600
         room = self.room()
         self.changes.append({"ts": round(time.time()), "from": a, "to": b, "room": round(room, 2) if room is not None else None})
@@ -894,26 +931,15 @@ class RoostManager(PricesMixin, QuattMixin, HourLogMixin, HealthMixin, CareMixin
         hour = int(t // 3600 * 3600)
         if self._acc_hour != hour:
             if self._acc_hour is not None:
-                for e in reversed(self.hour_log[-3:]):
-                    if e["ts"] == self._acc_hour:
-                        e["dhw"] = round(min(1.0, self._dhw_acc / 3600), 2)
-                        e["q"] = round(self._heat_acc, 2)
-                        e["e"] = round(self._elec_acc, 3)
-                        e["cost"] = round(self._cost_acc, 4)
-                        e["T_end"] = self.room()
-                        if self._sp_acc[1] >= 1800:
-                            e["sp_mean"] = round(self._sp_acc[0] / self._sp_acc[1], 2)
-                        self._sources_close(e)
-                a = self._sp_acc
-                if a[1] >= 1800:                      # at least half the hour seen
-                    self.sp_hist[self._acc_hour] = [round(a[0] / a[1], 2), round(a[2] / a[3], 2) if a[3] >= 1800 else None]
+                self._close_hour(self._acc_hour, self.room())
             self._acc_hour, self._dhw_acc, self._heat_acc = hour, 0.0, 0.0
-            self._elec_acc = self._cost_acc = 0.0
+            self._elec_acc = self._cost_acc = self._obs_acc = 0.0
             self._sp_acc = [0.0, 0.0, 0.0, 0.0]
             self._sources_reset()
         if self._last_tick is None:
             return
         dt = min(600.0, max(0.0, t - self._last_tick))
+        self._obs_acc += dt
         self._sources_tick(dt)
         sp, reading = self.thermostat_sp(), self.thermostat_reading()
         if sp is not None:
@@ -927,6 +953,52 @@ class RoostManager(PricesMixin, QuattMixin, HourLogMixin, HealthMixin, CareMixin
             self._dhw_acc += dt
         elif state == "heating":
             self._heat_acc += max(0.0, self._kw(self.ent.get("power_out")) or 0.0) * dt / 3600
+
+    def _close_hour(self, hour: int, room: float | None, partial: bool = False) -> None:
+        """The hour's measurements into its log entry: heating electricity, its cost, heat, hot water, the mean setpoint,
+        and how many seconds of it Roost saw (a restart in the hour: `obs` short, so the day is not taken as complete)."""
+        for e in reversed(self.hour_log[-3:]):
+            if e["ts"] == hour:
+                e["dhw"] = round(min(1.0, self._dhw_acc / 3600), 2)
+                e["q"] = round(self._heat_acc, 2)
+                e["e"] = round(self._elec_acc, 3)
+                e["cost"] = round(self._cost_acc, 4)
+                e["obs"] = round(self._obs_acc)
+                if room is not None or "T_end" not in e:
+                    e["T_end"] = room
+                if self._sp_acc[1] >= 1800:
+                    e["sp_mean"] = round(self._sp_acc[0] / self._sp_acc[1], 2)
+                if partial:
+                    e["partial"] = True
+                self._sources_close(e)
+        a = self._sp_acc
+        if a[1] >= 1800:                      # at least half the hour seen
+            self.sp_hist[hour] = [round(a[0] / a[1], 2), round(a[2] / a[3], 2) if a[3] >= 1800 else None]
+
+    def _acc_state(self) -> dict:
+        """The hour in progress, saved with the rest: a restart within the hour goes on counting from here (R18)."""
+        return {"hour": self._acc_hour, "dhw": self._dhw_acc, "heat": self._heat_acc, "elec": self._elec_acc,
+                "cost": self._cost_acc, "obs": self._obs_acc, "sp": list(self._sp_acc), "src": list(self._src_acc),
+                "last_elec": self._last_elec, "live": self._live.state(), "at": time.time()}
+
+    def _restore_acc(self, d: dict | None, t: float) -> None:
+        """Back after a restart. The same hour: go on counting, from the meter reading Roost had. A later hour: the hour
+        that was going on is closed with what was seen of it (marked partial); the meter starts afresh, as the use while
+        Home Assistant was down cannot be put in an hour."""
+        if not d or d.get("hour") is None:
+            return
+        self._acc_hour = int(d["hour"])
+        self._dhw_acc, self._heat_acc = float(d.get("dhw") or 0.0), float(d.get("heat") or 0.0)
+        self._elec_acc, self._cost_acc = float(d.get("elec") or 0.0), float(d.get("cost") or 0.0)
+        self._obs_acc = float(d.get("obs") or 0.0)
+        self._sp_acc = list(d.get("sp") or [0.0, 0.0, 0.0, 0.0])
+        self._src_acc = list(d.get("src") or [0.0, 0.0, 0.0])
+        if self._acc_hour == int(t // 3600 * 3600):
+            self._last_elec = d.get("last_elec")
+            self._live.restore(d.get("live"))       # the seconds of heating counted in this hour so far (Quatt)
+        else:
+            self._close_hour(self._acc_hour, None, partial=True)
+            self._acc_hour = None
 
     def _dhw_samples(self, rows: list[model.HourRow]) -> list[tuple[int, int, float]]:
         """(local weekday, local hour, share on hot water) of the last weeks (a Quatt makes no hot water: all zero)."""

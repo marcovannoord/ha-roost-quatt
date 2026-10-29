@@ -108,15 +108,17 @@ def slots_from_dict(d: dict) -> list[Slot]:
     return _close_ends(pts)
 
 
-def slots_from_day_list(values: list, day_start_ts: float) -> list[Slot]:
+def slots_from_day_list(values: list, day_start_ts: float, day_end_ts: float | None = None) -> list[Slot]:
+    """A list of prices for one local day, evenly over it. day_end_ts: the next local midnight, so a day of 23 or 25
+    hours (daylight saving time) gets its own length (R06); without it a day is 24 hours."""
     vals = [_num(v) for v in values]
     if not vals:
         return []
-    step = 86400 / len(vals)
+    step = ((day_end_ts if day_end_ts is not None else day_start_ts + 86400) - day_start_ts) / len(vals)
     return [(day_start_ts + i * step, day_start_ts + (i + 1) * step, v) for i, v in enumerate(vals) if v is not None]
 
 
-def find_slots(attributes: dict, local_midnight_ts: float | None = None) -> list[Slot]:
+def find_slots(attributes: dict, local_midnight_ts: float | None = None, midnights: list[float] | None = None) -> list[Slot]:
     """All slots found in the attributes of one entity, merged and de-duplicated (later sources win per start)."""
     found: dict[float, Slot] = {}
     for key, val in (attributes or {}).items():
@@ -127,7 +129,11 @@ def find_slots(attributes: dict, local_midnight_ts: float | None = None) -> list
             slots = slots_from_dict(val)
         elif (key in ("today", "tomorrow") and isinstance(val, list) and val and local_midnight_ts is not None
               and all(isinstance(x, (int, float)) or x is None for x in val)):
-            slots = slots_from_day_list(val, local_midnight_ts + (86400 if key == "tomorrow" else 0))
+            if midnights and len(midnights) >= 3:      # today, tomorrow and the day after, as local midnights
+                d = 1 if key == "tomorrow" else 0
+                slots = slots_from_day_list(val, midnights[d], midnights[d + 1])
+            else:
+                slots = slots_from_day_list(val, local_midnight_ts + (86400 if key == "tomorrow" else 0))
         for sl in slots:
             found[sl[0]] = sl
     return sorted(found.values())
@@ -165,8 +171,10 @@ def slot_scale(slots: list[Slot], unit: str | None, state: float | None, now_ts:
     return price_scale(unit, [v for *_, v in slots])
 
 
-def hourly(slots: list[Slot], start_ts: float, hours: int, fill_last: bool = True) -> list[float | None]:
-    """Time-weighted average per hour from start_ts (hour 0 may be a partial hour: averaged over what is left)."""
+def hourly(slots: list[Slot], start_ts: float, hours: int, fill_last: bool = True, full: bool = False) -> list[float | None]:
+    """Time-weighted average per hour from start_ts (hour 0 may be a partial hour: averaged over what is left).
+    full: an hour only counts when its slots cover all of it (what is left of hour 0); a price for its first quarter
+    is not a price for the hour (R05)."""
     out: list[float | None] = []
     last: float | None = None
     for h in range(hours):
@@ -178,7 +186,7 @@ def hourly(slots: list[Slot], start_ts: float, hours: int, fill_last: bool = Tru
             if ov > 0:
                 tot += v * ov
                 w += ov
-        if w > 0:
+        if w > 0 and not (full and w < (b - a) - 1):
             last = tot / w
             out.append(last)
         else:
@@ -225,8 +233,10 @@ def fill_gaps(vals: list[float | None], start_ts: float, seen: dict[int, float],
     return out, guessed
 
 
-def energy_per_hour(slots: list[Slot], start_ts: float, hours: int) -> list[float]:
-    """kWh per hour from slots holding average power in kW (Solcast style): integral of power over the hour."""
+def energy_per_hour(slots: list[Slot], start_ts: float, hours: int, rate_first: bool = False) -> list[float]:
+    """kWh per hour from slots holding average power in kW (Solcast style): integral of power over the hour.
+    rate_first: hour 0 as a rate over a whole hour (the mean power of what is left of it, at least the last quarter),
+    as the planner and the house use count with whole hours (R09)."""
     out = []
     for h in range(hours):
         a = start_ts if h == 0 else _hour_floor(start_ts) + h * 3600
@@ -236,6 +246,8 @@ def energy_per_hour(slots: list[Slot], start_ts: float, hours: int) -> list[floa
             ov = min(b, en) - max(a, s)
             if ov > 0:
                 e += v * ov / 3600
+        if h == 0 and rate_first:
+            e *= 3600 / max(900.0, b - a)
         out.append(max(0.0, e))
     return out
 

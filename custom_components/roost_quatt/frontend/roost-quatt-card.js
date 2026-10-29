@@ -1,6 +1,6 @@
 /* Roost card - served by the roost integration. */
 (() => {   // own scope: safe if the file is loaded twice as a classic script (legacy frontend + a manual resource)
-const CARD_VERSION = "0.8.0";
+const CARD_VERSION = "0.8.1";
 
 // Plain ES2017 on purpose (no ?. / ??), ASCII only (\u escapes): wall tablets often run an older browser.
 const nn = (a, b) => (a === null || a === undefined ? b : a);
@@ -101,7 +101,7 @@ const WHY = {
         warm_enough: "warm enough ({room} \u00b0C): no heat needed", holding: "keeping the room at temperature",
         paused: "changed by hand: leaving the thermostat alone for {min} more min",
         already_right: "thermostat already right", wait: "next change allowed in {min} min",
-        urgent: "room below the minimum: correcting now", following: "following the plan",
+        urgent: "room below the minimum: correcting now", hold_ahead: "room above the setpoint: keeping {sp} \u00b0C ahead of dearer hours ({ct} ct from {at}:00); the heat pump waits", following: "following the plan",
         airing: "window open: thermostat at its lowest until it closes", fallback_no_price: "no price: planned on one flat price", fallback_schedule: "no full plan: comfort schedule", min_run: "the heat pump just started: lowering in {min} min", set_failed: "could not set the thermostat: trying again in {min} min" },
   nl: { starting: "opstarten", window_open: "raam open: Roost wacht tot de kamer terug is", no_price: "geen prijs", no_room: "geen kamertemperatuur",
         no_weather: "geen weersverwachting en geen buitentemperatuur", no_plan: "geen plan", off: "Roost staat uit",
@@ -116,7 +116,7 @@ const WHY = {
         warm_enough: "warm genoeg ({room} \u00b0C): geen warmte nodig", holding: "kamer op temperatuur houden",
         paused: "met de hand gewijzigd: thermostaat nog {min} min met rust gelaten",
         already_right: "thermostaat staat al goed", wait: "volgende wijziging over {min} min",
-        urgent: "kamer onder het minimum: nu bijsturen", following: "volgt het plan",
+        urgent: "kamer onder het minimum: nu bijsturen", hold_ahead: "kamer boven het setpoint: houdt {sp} \u00b0C aan v\u00f3\u00f3r duurdere uren ({ct} ct vanaf {at}:00); de warmtepomp wacht", following: "volgt het plan",
         airing: "raam open: thermostaat op de laagste stand tot het dicht is", fallback_no_price: "geen prijs: gepland op \u00e9\u00e9n vlakke prijs", fallback_schedule: "geen volledig plan: comfortschema", min_run: "warmtepomp is net gestart: verlagen over {min} min", set_failed: "thermostaat niet gelukt: opnieuw over {min} min" },
   de: { starting: "startet", window_open: "Fenster offen: Roost wartet, bis der Raum zur\u00fcck ist", no_price: "kein Preis", no_room: "keine Raumtemperatur",
         no_weather: "keine Wettervorhersage und keine Au\u00dfentemperatur", no_plan: "kein Plan", off: "Roost ist aus",
@@ -131,7 +131,7 @@ const WHY = {
         warm_enough: "warm genug ({room} \u00b0C): keine W\u00e4rme n\u00f6tig", holding: "h\u00e4lt den Raum auf Temperatur",
         paused: "von Hand ge\u00e4ndert: l\u00e4sst das Thermostat noch {min} min in Ruhe",
         already_right: "Thermostat steht schon richtig", wait: "n\u00e4chste \u00c4nderung in {min} min erlaubt",
-        urgent: "Raum unter dem Minimum: korrigiert jetzt", following: "folgt dem Plan",
+        urgent: "Raum unter dem Minimum: korrigiert jetzt", hold_ahead: "Raum \u00fcber dem Sollwert: h\u00e4lt {sp} \u00b0C vor teureren Stunden ({ct} ct ab {at}:00); die W\u00e4rmepumpe wartet", following: "folgt dem Plan",
         airing: "Fenster offen: Thermostat auf niedrigster Stufe bis es zu ist", fallback_no_price: "kein Preis: mit einem festen Preis geplant", fallback_schedule: "kein vollst\u00e4ndiger Plan: Komfortplan", min_run: "W\u00e4rmepumpe gerade gestartet: senken in {min} min", set_failed: "Thermostat nicht gesetzt: neuer Versuch in {min} min" },
   fr: { starting: "d\u00e9marrage", window_open: "fen\u00eatre ouverte : Roost attend que la pi\u00e8ce revienne", no_price: "pas de prix", no_room: "pas de temp\u00e9rature de pi\u00e8ce",
         no_weather: "pas de pr\u00e9visions m\u00e9t\u00e9o ni de temp\u00e9rature ext\u00e9rieure", no_plan: "pas de plan", off: "Roost est arr\u00eat\u00e9",
@@ -146,7 +146,7 @@ const WHY = {
         warm_enough: "assez chaud ({room} \u00b0C) : pas besoin de chaleur", holding: "maintient la pi\u00e8ce \u00e0 temp\u00e9rature",
         paused: "chang\u00e9 \u00e0 la main : laisse le thermostat encore {min} min",
         already_right: "thermostat d\u00e9j\u00e0 bien r\u00e9gl\u00e9", wait: "prochain changement possible dans {min} min",
-        urgent: "pi\u00e8ce sous le minimum : correction maintenant", following: "suit le plan",
+        urgent: "pi\u00e8ce sous le minimum : correction maintenant", hold_ahead: "pi\u00e8ce au-dessus de la consigne : garde {sp} \u00b0C avant des heures plus ch\u00e8res ({ct} ct d\u00e8s {at}:00) ; la pompe \u00e0 chaleur attend", following: "suit le plan",
         airing: "fen\u00eatre ouverte : thermostat au plus bas jusqu'\u00e0 fermeture", fallback_no_price: "pas de prix : planifi\u00e9 sur un prix fixe", fallback_schedule: "pas de plan complet : programme de confort", min_run: "la pompe \u00e0 chaleur vient de d\u00e9marrer : baisse dans {min} min", set_failed: "thermostat non r\u00e9gl\u00e9 : nouvel essai dans {min} min" },
 };
 const WHY_DECIMALS = { sp: 1, room: 1, ct: 0, min: 0, at: 0 };
@@ -173,6 +173,7 @@ const fmt = (v, d) => (v === null || v === undefined || isNaN(v)) ? "\u2014" : N
 
 const SAVING_QUALITY = {
   "en": {
+    "partial_hours": "Home Assistant was restarted during an hour, so part of that hour was not measured.",
     "checked": "Model estimate checked against measured heating electricity and room temperatures; not a measured bill saving.",
     "forecast": "Expected model estimate; not a measured saving.",
     "unreliable": "No accepted saving estimate.",
@@ -187,6 +188,7 @@ const SAVING_QUALITY = {
     "settings_changed": "Comfort settings changed during this day."
   },
   "nl": {
+    "partial_hours": "Home Assistant is tijdens een uur herstart, waardoor een deel van dat uur niet is gemeten.",
     "checked": "Modelraming getoetst aan gemeten verwarmingsstroom en kamertemperaturen; geen gemeten besparing op de rekening.",
     "forecast": "Verwachte modelraming; geen gemeten besparing.",
     "unreliable": "Geen voldoende betrouwbare besparingsschatting.",
@@ -201,6 +203,7 @@ const SAVING_QUALITY = {
     "settings_changed": "De comfortinstellingen zijn tijdens deze dag veranderd."
   },
   "de": {
+    "partial_hours": "Home Assistant wurde w\u00e4hrend einer Stunde neu gestartet; ein Teil dieser Stunde wurde nicht gemessen.",
     "incomplete_forecast": "Ein vollst\u00e4ndiger 24-Stunden-Plan ist noch nicht verf\u00fcgbar.",
     "checked": "Modellsch\u00e4tzung mit gemessenem Heizstrom und Raumtemperaturen gepr\u00fcft; keine gemessene Rechnungsersparnis.",
     "forecast": "Erwartete Modellsch\u00e4tzung; keine gemessene Ersparnis.",
@@ -215,6 +218,7 @@ const SAVING_QUALITY = {
     "settings_changed": "Die Komforteinstellungen wurden im Tagesverlauf ge\u00e4ndert."
   },
   "fr": {
+    "partial_hours": "Home Assistant a red\u00e9marr\u00e9 pendant une heure ; une partie de cette heure n'a pas \u00e9t\u00e9 mesur\u00e9e.",
     "incomplete_forecast": "Le plan complet sur 24 heures n'est pas encore disponible.",
     "checked": "Estimation v\u00e9rifi\u00e9e avec la consommation de chauffage et les temp\u00e9ratures mesur\u00e9es ; pas une \u00e9conomie mesur\u00e9e sur la facture.",
     "forecast": "Estimation pr\u00e9vue par le mod\u00e8le ; pas une \u00e9conomie mesur\u00e9e.",

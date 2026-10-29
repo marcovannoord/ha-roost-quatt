@@ -148,8 +148,15 @@ With **Fixed price** a next screen asks your rate (all in: energy, taxes, VAT), 
 with its hours, and optionally a fixed export price. With a single fixed rate Roost still saves a little: it heats more
 in the warmer hours, when the heat pump is more efficient, and uses your solar.
 
-Tomorrow's prices usually arrive in the afternoon. Until then Roost fills the missing hours with the same hour a day
-earlier (shown faded on the card).
+Tomorrow's prices usually arrive in the afternoon. Until then the plan reaches as far as prices are published (the card
+says *prices until …*), and it grows when tomorrow's prices come in; Roost never fills in prices that are not published.
+The expected saving, cost and use for the next 24 hours are shown again once the plan covers them.
+
+A price sensor that only gives the **current price** (no prices for the coming hours in its attributes) works too.
+Roost tells from the sensor's history what it is: one price, or a fixed rate per hour of the day, is simply repeated; a
+price that changes every hour (a dynamic contract) is estimated from the day-ahead prices, the way the sensor followed
+them, and a notice suggests a sensor with a forecast or the built-in day-ahead prices; when that does not fit, Roost
+plans on one flat price. The same holds for the export price sensor.
 
 ### Screen 4 — Solar and home battery
 
@@ -202,22 +209,33 @@ Click **Submit**. Roost is set up — in shadow mode — and starts importing an
 
 - **Header**: what Roost is doing now and why (e.g. *expensive hour (46 ct): living off the heat in the floor*), and
   its mode (**SHADOW**, **ACTIVE**, **OFF**, **PAUSED**).
-- **Tiles**: *Room* (and the heat stored in the floor), *Thermostat* (its setting now, and what Roost decides),
-  *Planned* (the thermostat setting Roost wants, and the room temperature expected with it).
+- **Status line**: since when the plan holds and its next change (*Plan held since 13:32 · next change 23:00 → 21.5 °C*),
+  then small chips only for what is going on: how far prices are published, a fallback, an open window, the heat pump's
+  minimum run, a thermostat change that failed, the heat pump heating — and the **saving pill** (this month's saving
+  and how many days count): tap it for a calendar of the month, with the days that count in green and the days that do
+  not in grey (tap one for the reason).
+- **Tiles**: *Room* (with a small line of the last hours and the coming ones, and the heat stored in the floor),
+  *Thermostat* (its setting now, an arrow to the next change, a dot while the heat pump heats, and what Roost decides),
+  *Planned* (the thermostat setting Roost wants, why the plan was made — new prices, the room off the plan, … — and the
+  room temperature expected with it).
   The planned setting is a **thermostat setting**: with a slow heat pump Roost may set 19 °C while the room stays at
   21 °C — that means *don't heat now*, not *make the room 19 °C*.
 - **Extra rooms** (if you added any): temperature, minimum and its hours; orange when below it.
 - **Next 24 hours**: the planned thermostat setting (orange), the expected room temperature (white), the tariff per
-  hour (bars, faded where the price is not known yet), and the comfort hours (green band). **Slide over the graph** to
+  hour (bars, green to red from cheap to dear), own solar to use (yellow), the comfort hours (green band) and, under the
+  graph, the hours the heat pump is expected to heat (orange strip). **Slide over the graph** to
   read each hour; when the planner counts another price than the tariff (a battery's refill cost, own solar) it says so.
   The line under the graph says **why** that hour is what it is (e.g. *18:00 · expensive hour (47 ct): living off the
-  heat in the floor*, or *warm enough (21.2 °C): no heat needed*), from the room temperature the plan expects then.
+  heat in the floor*, *warm enough (21.2 °C): no heat needed*, or *room above the setpoint: keeping 21 °C ahead of
+  dearer hours; the heat pump waits*), from the room temperature the plan expects then.
+- **Heat pump runs** (once it has run): starts today and the mean run length, beside yesterday — few long runs are what
+  a heat pump likes.
 - **Table** (the switch in the header, or tap the **Planned** tile): the plan per hour,
   Predbat-style — hours with the same setting and reason on one line (time, setting with ↑/↓ where it changes, room
   expected, tariff coloured cheap/dear, kWh) with the reason under it; below it the last 7 days per day (today open, the
   other days folded with their cost, saving and how well the room was predicted): what was planned → what was set, the
   room measured (and expected 6 hours before), price, electricity and why, with *by hand* and *window open* marked. A day that
-  cost more than a steady thermostat says why (e.g. *4 h stored that were not needed: the room went up to 21.7 °C*).
+  cost more than a steady thermostat says why (for example how many hours the room was kept above comfort, and how warm it got).
   With solar or a home battery each day (and the look back's period) shows where the heating electricity came from:
   own solar, battery, grid — hot water not counted.
 - **Mode**: tap the **ACTIVE / SHADOW / OFF** label to switch; *Active* asks for a second tap. Switching from *Active*
@@ -226,6 +244,10 @@ Click **Submit**. Roost is set up — in shadow mode — and starts importing an
   temperature and the comfort hours with − / + (comfort, minimum by day and at night, comfort hours, lowest setpoint,
   store heat up to). They are Roost's own settings — the same as *Configure → Comfort*, which shows them too — and the
   one you change wins: the others follow it (comfort never below the day minimum, for example).
+  **Comfort per weekday**: *Same every day* or *Per weekday*. Per weekday shows a timeline for each day; tap a day,
+  move a period's start and end by the quarter hour with − / +, remove it (×) or add one (*+ period*), copy the day to
+  the weekdays, the weekend or every day, and **Save**. A period may run through midnight. Saving does not restart
+  Roost; it plans again at once.
 - **Curve** (the switch in the header): the heating curve advice in
   one view — the flow at 0 °C outside, the heat loss and the outdoor temperature from which the heat pump cycles; a
   graph of the flow temperature against the outdoor temperature, with the five points of the app evenly over the width:
@@ -239,9 +261,10 @@ Click **Submit**. Roost is set up — in shadow mode — and starts importing an
 - **Thermostat tile**: tap it for the thermostat's own controls (Home Assistant's dialog); Roost then pauses as after
   any change by hand.
 - **The Roost icon** (top left) opens Roost in *Settings → Devices & services*.
-- **Footer**: expected saving over the next 24 hours, yesterday and this month, against a steady thermostat; and the
-  **plan error 6 h** from the nightly self-check, with *ready to steer* when Roost thinks it is — and then a
-  **Let Roost steer** button (click twice).
+- **Footer**: expected saving over the next 24 hours, yesterday and this month, against a steady thermostat (only what
+  is known: in the morning, before tomorrow's prices, the next 24 hours are not shown); and the **plan error 6 h**
+  from the nightly self-check, with *ready to steer* when Roost thinks it is — and then a **Let Roost steer** button
+  (click twice).
 
 ### Look back
 
@@ -264,15 +287,15 @@ place, so the card does not grow. Choose **24 h**, **48 h** or **7 d**:
   the state at the end of the period still costs for each (a colder house is heat bought back later, a warmer one
   heat already bought), and every **plan change** of the last two days: the setting for that hour and the expected
   saving before → after, and why (new prices published, prices changed, weather forecast changed, room off from what
-  was expected, correction from the last hours, settings, estimated prices left out, or simply a new hour; a saving
+  was expected, correction from the last hours, settings, or simply a new hour; a saving
   that moves without any of these is not listed). The saving is also split into parts that add up: **less
   electricity** (waiting for the sun, not overheating, heating in warmer hours — of which in hours with sun, marked ☀
   in the table), **cheaper hours** and **heat left at the end**.
 
 Roost keeps a week of hours and 60 days of day numbers for this; the history starts when you install 0.5.5.
 
-Options (also in the visual editor): `compact: true` (header and tiles only, for a wall tablet), `show_tiles`,
-`show_chart`, `show_curve`, `show_footer`, `view: table`, `view: curve` or `view: history` (open in the table, the curve or the look back — e.g. a
+Options (also in the visual editor): `compact: true` (header, status line and tiles, for a wall tablet), `show_status`,
+`show_tiles`, `show_chart`, `show_pumps` (the heat pump's runs), `show_curve`, `show_footer`, `view: table`, `view: curve` or `view: history` (open in the table, the curve or the look back — e.g. a
 second card on an analysis page),
 `history: false` (no look back switch), `language` (`en`, `nl`, `de`, `fr`), `time_format` (`24`, `12`), `title`.
 
@@ -372,6 +395,18 @@ Back to shadow or off: `select.roost_mode` → *Shadow* / *Off*. In *Off* Roost 
 
 ## 8. Day to day
 
+- **The plan holds.** Roost does not make the plan afresh every few minutes: it keeps its setpoints and only works out
+  every hour what they give. It plans afresh when tomorrow's prices are published, when the room is 0.25 °C or more off
+  what the plan expected (0.6 °C with a thermostat that shows half degrees), when the weather or solar forecast for the
+  coming hours changes clearly, when your panels give clearly more or less than forecast, when you change something
+  (settings, away, mode), after airing, after the nightly learning, and at least every 6 hours. The sensor's
+  `plan_made` and `plan_made_why` say when and why.
+- **Long runs.** Once the heat pump has started, Roost does not lower the thermostat for 40 minutes (*the heat pump just
+  started* on the card): short runs wear a heat pump and waste its warm-up.
+- **When something is missing.** Without an electricity price, room temperature or weather forecast Roost keeps the plan
+  it holds for up to an hour. After that, without a price it plans on one flat price (comfort and weather, no moving to
+  cheaper hours); without a room temperature or weather it follows your comfort schedule (comfort in the comfort hours,
+  the night minimum outside them). After three hours a notice says so. Such a day does not count for the saving.
 - **Changing the thermostat yourself is fine.** Roost steps aside for 2 hours (*Paused* on the card), then plans again
   from where the house is.
 - **Comfort suggestions.** When you keep making the same change by hand (warmer in the evening, earlier in the
@@ -461,11 +496,11 @@ integration page: click it and log in again. Installs from before 0.5.3 get that
 | Entity | What |
 |---|---|
 | `select.roost_mode` | Off / Shadow / Active |
-| `sensor.roost_planned_setpoint` | The thermostat setting Roost wants now. Attributes: reason, decision, the 24-hour plan with the reason per hour (`plan_why`), extra rooms |
+| `sensor.roost_planned_setpoint` | The thermostat setting Roost wants now. Attributes: reason, decision, the 24-hour plan with the reason per hour (`plan_why`), extra rooms, `plan_made` and `plan_made_why` (when and why the plan held was made), `fallback`, `price_horizon_hours` / `price_limited_until`, `pump_runs` (starts and run length today and yesterday), the weekly comfort periods |
 | `sensor.roost_heating_curve_advice` (hidden) | The advised flow temperature at 0 °C outside. Attributes: the five points (outdoor, advice, made), the curve now and how the heat pump is controlled (when Weheat gives them), the heat loss, the emitter and the outdoor temperature from which it cycles |
-| `sensor.roost_expected_saving_next_24_h` | Against the lowest steady thermostat that is as comfortable as the plan |
-| `sensor.roost_saving_yesterday`, `sensor.roost_saving_this_month` | Yesterday replayed with the same model, weather and prices |
-| `sensor.roost_heating_cost_today` | Heat pump electricity for heating × the price of each hour |
+| `sensor.roost_expected_saving_next_24_h` | Against the lowest steady thermostat that is as comfortable as the plan; unavailable while the plan does not cover 24 hours of published prices |
+| `sensor.roost_saving_yesterday`, `sensor.roost_saving_this_month` | Yesterday replayed with the same model, weather and prices, counted only when the replay matches the measured heating electricity (0.5 kWh and 25 %) and room temperatures (0.5 °C), the day is complete and its settings did not change. Attributes: `quality` (with the reasons), the raw model estimate; the month: included, excluded and missing days |
+| `sensor.roost_heating_cost_today` | Heat pump electricity for heating × the price of each hour; `unpriced_kwh`: electricity with no known price, left out of the cost |
 | `sensor.roost_heating_electricity_today` | The kWh of heating electricity today |
 | `sensor.roost_energy_value_now` | What a kWh is worth to Roost this hour (grid price, solar it would export, or the battery's refill cost) |
 | `sensor.roost_heat_pump_model` | The learned heat pump: COP, lowest output, how it follows the thermostat, hot water hours (details) |
@@ -490,7 +525,7 @@ Switched off by default (enable them on the device page under *+ disabled entiti
 | `roost.resume` | — | End a pause and plan again |
 | `roost.away` | `until` or `days`, `minimum` (default 16) | Nobody home: only the minimum, no comfort hours; warm again in time |
 | `roost.home` | — | End away |
-| `roost.set_settings` | any of `comfort`, `day_min`, `night_min`, `store_max`, `lowest_setpoint`, `day_from`, `day_to` | Roost's own temperatures and comfort hours (as in *Configure → Comfort*, not the thermostat); the one changed wins, the others follow. Also in the card: mode menu → ⚙ Settings |
+| `roost.set_settings` | any of `comfort`, `day_min`, `night_min`, `store_max`, `lowest_setpoint`, `day_from`, `day_to`, `weekly_comfort` (on/off), `comfort_schedule` (per weekday, e.g. `monday: "07:00-09:00, 17:30-22:00"`) | Roost's own temperatures, comfort hours and weekly periods (as in *Configure → Comfort*, not the thermostat); the one changed wins, the others follow. Also in the card: mode menu → ⚙ Settings |
 | `roost.import_history` | `days` (default 365) | Read the heat pump's history from Weheat again and learn |
 | `roost.explain_saving` | `day`: `yesterday` (default), `next_24h` or a date of the last week (`2026-10-19`) | Returns where the saving comes from, per hour against the steady thermostat, plus the plan changes and why (*Developer tools → Actions*, tick *return response*). The same as in the report |
 
@@ -618,15 +653,20 @@ it gives with what it knows then. The plan itself is made afresh when tomorrow's
 afternoon), when the weather or solar forecast changes clearly, when the room is clearly warmer or colder than
 expected, or when you change something; and the 24 hours move on an hour. The report and
 `roost.explain_saving` list each change with the setting and expected saving before → after and why. Hours whose
-price is not published yet are filled in from the same hour a day earlier; Roost never changes the thermostat because
-of such an estimate: when only the estimates would make it do something else now, it plans as if those hours cost the
-average of the known prices.
+price is not published yet are not part of the plan at all.
 
 **How is the saving calculated?** Roost plays the same hours twice with the same house model, weather and prices:
 once with its own settings, once with a steady thermostat — on the same 0.5 °C steps and exactly as comfortable as
 Roost (when one step is a little too cold and the next too warm, the two are weighed). The difference in cost is the saving, plus the difference in what the house's state at the end
 still costs: a house left colder must be heated back later, so turning down at the end of a day is not counted as a
-saving. Yesterday is replayed after midnight with what really happened.
+saving. Yesterday is replayed after midnight with what really happened, with the house model and settings of that day.
+A day only counts when that replay matches the heating electricity and the room temperatures that were measured, the
+day is complete (a restart of Home Assistant in an hour leaves that hour short) and its settings did not change;
+otherwise its saving is unavailable, with the reason (the calendar behind the saving pill on the card shows it).
+
+**Why does the card say *keeping 21 °C* while the room is warmer?** The room is above the setting, so nothing is
+heated now. Roost keeps the setting up instead of lowering it, so the house does not cool too far before dearer hours
+later; the heat pump waits until the room comes down to it.
 
 **Does it work with an air conditioner as well?** No, Roost is for a Weheat heat pump driven by a thermostat.
 
@@ -634,14 +674,15 @@ saving. Yesterday is replayed after midnight with what really happened.
 OpenTherm and smart thermostats have an integration).
 
 **Can I keep my own schedule?** In shadow mode, yes. In active mode Roost replaces it: put your wishes in the comfort
-settings instead.
+settings instead — with *Comfort per weekday* a different schedule per day, several periods a day.
 
-**What happens after a restart of Home Assistant?** Roost remembers everything (models, plan state, pauses) and carries
-on.
+**What happens after a restart of Home Assistant?** Roost remembers everything (models, the plan it holds, pauses, the
+hour in progress and its meter reading) and carries on. The heat stored in the floor is aged over the time Home
+Assistant was down. A restart over the hour leaves that hour partly measured, so that day's saving is not counted.
 
 ---
 
 ## 17. Removing Roost
 
-Settings → Devices & services → Roost → ⋮ → **Delete**. Your thermostat keeps its last setting: set it back to your
-usual temperature. Then remove Roost in HACS if you like.
+Settings → Devices & services → Roost → ⋮ → **Delete**. If Roost was steering it sets the thermostat back to your
+comfort temperature; turn your usual schedule back on if you had one. Then remove Roost in HACS if you like.

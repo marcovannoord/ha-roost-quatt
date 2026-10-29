@@ -28,6 +28,7 @@ EN = {
     "store_ahead": "warming the floor ahead of dearer hours ({ct:.0f} ct from {at}:00)",
     "store_ahead_house": "warming the house ahead of dearer hours ({ct:.0f} ct from {at}:00)",
     "warm_enough": "warm enough ({room:.1f} °C): no heat needed",
+    "hold_ahead": "room above the setpoint: keeping {sp:g} °C ahead of dearer hours ({ct:.0f} ct from {at}:00); the heat pump waits",
     "holding": "keeping the room at temperature",
     # control: what happens with the thermostat
     "paused": "changed by hand: leaving the thermostat alone for {min:.0f} more min",

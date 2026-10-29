@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.2.1 — Roost 0.8.1 merged
+
+Roost v0.8.1 brought in: a restart within an hour keeps what was measured so far, heat stored in the floor is aged over the time Home Assistant was down, daylight saving time, partly published hours, solar not counted twice, a weather entity in its own units, a change by hand right after Roost's own. Its notes are below.
+
+- For Quatt: the seconds of heating Roost counts itself in the hour in progress are saved with the hour too, so a restart within the hour goes on counting instead of dropping that hour.
+- A Quatt has no energy meter: the meter reading 0.8.1 saves with the hour stays empty, the electricity in the hour so far is kept as Roost integrated it.
+
 ## v0.2.0 — Roost 0.8.0 merged
 
 Roost v0.8.0 brought into Roost for Quatt: a plan that holds, the unit stopping as soon as the thermostat asks nothing, the response learned from the last week when the unit answers differently, weekly comfort periods, savings checked against the day, the renewed card. Its notes are below; what is Quatt-specific stays as in v0.1.0.
@@ -18,6 +25,25 @@ First version of the fork of Roost v0.7.7 for Quatt heat pumps.
 - Domain `roost_quatt`, card `custom:roost-quatt-card`, services `roost_quatt.*`.
 
 _Below: the history of Roost itself._
+
+## v0.8.1 — restarts, daylight saving time and the smaller review points
+
+**For everyone who restarts Home Assistant now and then, or has a price or solar sensor with lists per day** — a restart no longer loses the hour in progress, the twice-a-year change of daylight saving time no longer shifts prices, house use or the battery's habits by an hour, and a few rare input cases are handled properly.
+
+### Fixes
+- **A restart within an hour**: the heating electricity, cost and heat measured so far in that hour were lost, and the meter reading Roost counted from. They are now saved; back in the same hour Roost counts on. A restart over the hour closes the hour with what was seen of it, and that day's saving is not taken as complete
+- **Heat stored in the floor** was restored after a restart as if no time had passed; it is now aged over the time Home Assistant was down
+- **Daylight saving time**: a price sensor with a list per day (23 or 25 prices on the change days) was spread over 24 hours and tomorrow started an hour off; the house use profile and the battery's learned hours were taken by "the hour now plus i", an hour off after the change. Both now follow the real local hours
+- **A future hour with only part of its price published** (a feed that ends in the middle of an hour) no longer counts as a known hour
+- **Two solar forecasts** (today and tomorrow) that cover the same hours are no longer added up
+- **Solar in the hour in progress** is counted as a rate over the hour, as the house use and the planner count whole hours: with a quarter of an hour left, 2 kW of sun counted as 0.5 kW
+- **A weather entity in its own units** (°F, m/s, mph) is converted by those units instead of Home Assistant's
+- **"Warming the floor" while nothing heats**: with the room above the setpoint the card said *warming the floor ahead of dearer hours* (or *charging the floor now*) while the heat pump stood still. Roost was keeping the setting up so the house does not cool too far before the dear hours; it now says so: *room above the setpoint: keeping 21 °C ahead of dearer hours; the heat pump waits*
+- **A change by hand right after Roost's own change** (within a minute) was taken for Roost's change coming back; a change that carries a user now pauses Roost as any change by hand
+
+### After updating
+Update in HACS (or install the new `roost.zip`) and restart Home Assistant, then reload the dashboard (Ctrl+F5).
+
 ## v0.8.0 — a plan that holds, weekly comfort, savings checked against the day
 
 **For everyone: Roost steers more calmly, and the heat pump no longer runs in short bursts** — the plan now holds until something real changes, the planner knows the unit stops as soon as the thermostat asks nothing, and when prices, the room or the weather are missing Roost falls back to something sensible instead of leaving the thermostat wherever it was. Comfort can be set per weekday, and a saving is only shown when the replayed day matches what was measured.

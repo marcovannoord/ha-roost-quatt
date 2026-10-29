@@ -188,3 +188,14 @@ def test_maximum_output_line_from_the_rated_power():
     m.pmax_a, m.pmax_b, m.pmax_lo, m.pmax_hi = a, b, lo, hi
     assert 8.7 <= m.pmax(-1.0) <= 9.4 and 7.6 <= m.pmax(-5.0) <= 8.4 and m.pmax(-10.0) < 7.5 and 12.0 <= m.pmax(20.0) <= 12.3
     assert quatt.pmax_line(samples[:16]) is None              # two temperatures: too few to draw a line
+
+
+def test_live_hour_state_round_trip():
+    lh = quatt.LiveHour()
+    lh.hour, lh.heating_s, lh.boiler_s, lh.seen_s = 1768471200, 900.4, 0.0, 1500.2
+    other = quatt.LiveHour()
+    other.restore(lh.state())
+    assert (other.hour, other.heating_s, other.seen_s) == (1768471200, 900.0, 1500.0)
+    other.restore(None)
+    other.restore([None, 0, 0, 0])
+    assert other.hour == 1768471200                   # nothing to restore: left as it was

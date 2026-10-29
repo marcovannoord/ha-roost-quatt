@@ -12,6 +12,7 @@ ENERGY_ABS_KWH = 0.5
 ENERGY_REL = 0.25
 ROOM_MAE_K = 0.5
 COMFORT_TOLERANCE_CH = 0.05
+OBSERVED_S = 3000          # seconds of an hour Roost must have seen for its measurements to count
 
 
 def comparison(short: float, baseline_short: float, extra_rooms: int = 0) -> dict:
@@ -41,6 +42,9 @@ complete local day; UTC timestamps distinguish the repeated hour when daylight s
     expected = [start_ts + i * 3600 for i in range(expected_hours)]
     if [e.get("ts") for e in entries] != expected:
         reasons.append("incomplete_day")
+    # an hour Roost saw only part of (a restart within it): its measured use is short (entries before v0.8.1 have no obs)
+    if any(e.get("partial") or (e.get("obs") is not None and e["obs"] < OBSERVED_S) for e in entries):
+        reasons.append("partial_hours")
 
     def number(v):
         return isinstance(v, (int, float)) and not isinstance(v, bool) and isfinite(v)

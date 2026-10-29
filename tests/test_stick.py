@@ -149,3 +149,16 @@ def test_price_history_classification_and_fit():
 
 if __name__ == "__main__":
     run_all(globals())
+
+
+def test_a_setpoint_below_the_room_is_never_called_warming():
+    """27-10-2026: the room 21.9 °C, the thermostat 21.0 and the unit idle, while the card said "warming the floor
+    ahead of dearer hours". A setting kept up below the room reads as keeping it, not as warming."""
+    hp = heatpump.HeatPumpModel(a=0.6, k=3.0, offset=0.5, follow=1.0, th_diff=-0.2)
+    s = planner.Settings(comfort=21.0, day_min=19.0, night_min=19.0, store_max=25.0, sp_min=19.0)
+    hours = [planner.HourIn(t_out=11.0, wind=3.5, rad=0.0, p_grid=0.40 if i < 11 else 0.55, p_own=0.40,
+                            day=False, hour=(19 + i) % 24) for i in range(16)]
+    p = planner.plan(HOUSE, hp, s, hours, 21.9, 0.8, 21.0, 24, 0.0, fixed=[21.0] * 16)
+    r = planner.explain(p, hours, 21.9, s, hp, HOUSE)
+    assert r.code in ("hold_ahead", "warm_enough", "holding"), r
+    assert "store" not in r.code

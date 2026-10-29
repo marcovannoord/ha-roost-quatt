@@ -21,43 +21,58 @@ Plans your thermostat 24 hours ahead on price, weather and the heat your house s
 
 ## What it does
 
-- **Plans instead of reacting.** A 24-hour plan of thermostat settings that holds until something real changes. When an hour is cheap (or your
+- **Plans instead of reacting.** A 24-hour plan of thermostat settings that holds until something real changes (new prices,
+  the room clearly off the plan, a changed forecast, a change of yours). When an hour is cheap (or your
   solar earns little) and an expensive evening follows, it charges the floor a little; in the expensive hours the house
   lives off that heat. It weighs the price difference against the heat that leaks away and the better COP in the warm
   afternoon.
+- **Calm, long runs.** The planner knows a heat pump stops as soon as the thermostat asks for nothing, and the plan is
+  not made afresh every few minutes, so the thermostat does not go up and down and the heat pump does not run in short
+  bursts; once it starts, Roost lets it run at least 40 minutes.
 - **Keeps the water lukewarm.** It never asks for much more than the room temperature, so an OpenTherm thermostat keeps
   asking for low water temperatures and the heat pump keeps a high COP.
 - **Learns your house** every night: heat loss, the heat the house stores, how long the floor holds it, the facade the
   sun comes in through, wind, internal gains per hour of the day. A new model is only used when it predicts better.
 - **Learns your heat pump**: its COP, how it responds to the thermostat (an OpenTherm thermostat modulates and the heat
-  pump follows slowly — Roost plans with that delay), its lowest output, when it makes hot water.
+  pump follows slowly — Roost plans with that delay), its lowest output, when it makes hot water. When the heat pump
+  answers differently once Roost steers, the last week's own response takes over.
 - **Starts from last winter.** It imports the heat pump's hourly history (a year) from Weheat, read-only,
   with its own Weheat login (you log in with your Weheat account in the setup) — so it knows your house from day one.
 - **Checks itself.** Every night it replays the last week with the setpoints that were really on the thermostat (in
   mild weather the last heating weeks instead); when it predicts well enough it offers to take over. Between nights it
-  corrects from the last hours — what sunny hours miss as extra sun, so a sunny afternoon does not warm the night.
+  corrects from the last hours without sun.
 - **Dynamic or fixed price**, solar, home battery (energy from the battery is valued at what refilling it costs), net
-  metering or not.
+  metering or not. Only published prices steer the plan; a price sensor without a forecast works too (a fixed rate is
+  repeated, a dynamic price is estimated from the day-ahead prices).
+- **Comfort per weekday**: one daily interval, or several comfort periods per weekday on quarter hours (also through
+  midnight) — set in the card or in *Configure → Comfort*.
 - **Extra rooms**: radiators upstairs or a bedroom get a minimum in their own hours, so Roost never lets the heat pump
   rest longer than they can take.
 - **Knows when you air the room.** A fast drop of the room temperature (or a window sensor) means a window is open:
-  Roost waits instead of heating the outdoors, and does not learn from it.
+  Roost does not learn from it; with a window sensor it also turns the thermostat down until the window closes.
 - **Respects you.** At most one change an hour, steps aside for two hours when you change the thermostat, never below
   your minimums or its lowest setting, comfort suggestions instead of changing your settings by itself. When it stops
   steering (shadow, off or removed) it puts the thermostat back on your comfort temperature.
 - **Away, pause and settings from the card.** Tap the mode label: off / shadow / active, pause two hours, away for a day,
   three days or a week (only a minimum, warm again in time), and every temperature and the comfort hours with − / +.
-- **Watches over itself.** A thermostat that cannot be reached or changed, a check that no longer passes while it steers,
-  learning that fails, a Weheat login that is needed again: a notice in Repairs and — only if you choose where they go —
-  a notification on your phone, plus an optional weekly summary.
+- **Watches over itself.** A thermostat that cannot be reached or changed, a house that stays below its minimum, a check
+  that no longer passes while it steers, learning that fails, a Weheat login that is needed again: a notice in Repairs
+  and — only if you choose where they go — a notification on your phone, plus an optional weekly summary. Without a
+  price, room temperature or weather forecast it falls back to one flat price or your comfort schedule, instead of
+  leaving the thermostat wherever it was.
+- **Survives restarts**: the hour in progress, the plan held and the heat in the floor carry on over a restart of Home
+  Assistant.
 - **Shows where the heating electricity came from**: own solar, home battery or grid, per day and per period (hot water
   not counted).
-- **Its own dashboard card** with the plan, the expected room temperature, the tariff per hour, **why each hour is what
-  it is**, and what it saves; the plan and the last week as a **table**; and a **look back**: what was planned beside
-  what happened, how well it predicted, a log of every change and why, and a report to keep.
+- **Its own dashboard card** with a status line (the plan held, its next change, and only what is going on now), the
+  plan with the expected room temperature, the tariff per hour, own solar and the hours the heat pump will heat, **why
+  each hour is what it is**, the heat pump's starts and run length today, and what it saves with a calendar of the
+  days that count; the plan and the last week as a **table**; and a **look back**: what was planned beside what
+  happened, how well it predicted, a log of every change and why, and a report to keep.
 - **Explains its saving.** Per hour, for yesterday and the next 24 hours, Roost beside the equally comfortable steady
   thermostat it is compared with, and every change of the plan with why (in the report and as `roost.explain_saving`).
-  It never changes the thermostat because of a price that is not published yet.
+  A day's saving only counts when Roost's replay of that day matches the heating electricity and room temperatures
+  that were measured; otherwise it says why it is not counted.
 - **Heating curve advice**: the flow temperatures your house needs, as the five points of the Weheat app, from your heat
   loss, your floor or radiators and the heat pump's own logs — beside what the heat pump really made, and for another
   indoor temperature if you like.
@@ -70,7 +85,8 @@ Plans your thermostat 24 hours ahead on price, weather and the heat your house s
 | <img src="assets/card-curve.png" width="400" alt="Curve"><br>**Curve** — the heating curve your house needs as the five points of the Weheat app, beside every hour the heat pump ran | <img src="assets/card-lookback.png" width="400" alt="Look back"><br>**Look back** — what was planned beside what happened, how well the room was predicted 6 hours ahead, and a log of every change |
 
 <sub>Overview, table and look back: Roost's own planner and control on two simulated winter days with dynamic prices
-(an example, not a promise); the curve: a real house.</sub>
+(an example, not a promise); the curve: a real house. Screenshots of v0.7: since v0.8 the card also has a status line,
+the heat pump's runs and the savings calendar.</sub>
 
 ## Quick start
 
@@ -97,7 +113,7 @@ Everything else — every screen, every setting, the card, repairs, troubleshoot
   pump must follow the thermostat, not only its own heating curve — Roost checks this.
 - An **electricity price**: a sensor with the prices of the coming hours (evcc, Nord Pool, Tibber, ENTSO-e, Frank
   Energie, Zonneplan, … are read automatically) — or, without one, the **built-in day-ahead prices** with your
-  supplier's formula — or your fixed contract's rate.
+  supplier's formula — or your fixed contract's rate. A sensor with only the current price works, but plans less well.
 - Optional: a room sensor, solar and battery sensors (the house's use is worked out from grid + solar when there is no
   house power sensor), solar forecast, extra room sensors, window sensors, a notify service for notifications.
 

@@ -544,6 +544,14 @@ def explain(p: Plan, hours: list[HourIn], room: float, s: Settings, hp: HeatPump
     if ph.heat < 0.1 and sp <= room + th:
         # no heat this hour: the room is warmer than the setpoint (sun, a warm day), whatever the price — not storing
         return Reason("warm_enough", {"room": round(room, 1)})
+    if sp > hold + 0.25 and sp <= room + th:
+        # above holding but below the room: nothing is heated now, the setting is kept up so the house does not cool
+        # too far before dearer hours (it read "warming the floor" / "charging" while the unit stood still)
+        for k in range(i + 1, min(len(p.hours), len(hours), i + 13)):
+            if p.hours[k].price >= now * (1 + PRICE_SPREAD) + 0.005:
+                return Reason("hold_ahead", {"ct": round(p.hours[k].price * 100, 1), "sp": sp,
+                                             "at": hours[k].hour if hours[k].hour >= 0 else k - i})
+        return Reason("holding", {"sp": sp})
     if h.own_kw >= 0.5 and sp > hold + 0.25:
         return Reason("store_solar" if floor else "store_solar_house", {"sp": sp})
     if sp > hold + 0.25 and cheap:

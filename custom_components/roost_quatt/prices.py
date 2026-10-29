@@ -59,7 +59,7 @@ class PricesMixin:
         if not self._epex:
             return None
         mult, add = _f(self.conf.get(mult_key)) or 0.0, _f(self.conf.get(add_key)) or 0.0
-        raw = [None if v is None else epex.formula(v, mult, add) for v in series.hourly(self._epex, now.timestamp(), hours, fill_last=False)]
+        raw = [None if v is None else epex.formula(v, mult, add) for v in series.hourly(self._epex, now.timestamp(), hours, fill_last=False, full=True)]
         cur = series.current_value(self._epex, now.timestamp())
         return self._published(key, raw, now, epex.formula(cur, mult, add) if cur is not None else None)
 
@@ -86,14 +86,15 @@ class PricesMixin:
         st = self._state(eid)
         if st is None:
             return None
-        mid = dt_util.start_of_local_day(dt_util.as_local(now)).timestamp()
-        slots = series.find_slots(dict(st.attributes), mid)
+        today = dt_util.as_local(now).date()
+        mids = [dt_util.start_of_local_day(today + timedelta(days=d)).timestamp() for d in range(3)]
+        slots = series.find_slots(dict(st.attributes), mids[0], mids)
         cur = _f(st.state)
         unit = st.attributes.get(ATTR_UNIT_OF_MEASUREMENT)
         scale = series.price_scale(unit, [cur] if cur is not None else [v for _, _, v in slots])     # for the state
         if slots:
             fscale = series.slot_scale(slots, unit, cur * scale if cur is not None else None, now.timestamp())
-            raw = [None if v is None else v * fscale for v in series.hourly(slots, now.timestamp(), hours, fill_last=False)]
+            raw = [None if v is None else v * fscale for v in series.hourly(slots, now.timestamp(), hours, fill_last=False, full=True)]
             return self._published(eid, raw, now, cur * scale if cur is not None else None)
         if cur is None:
             return None
@@ -125,7 +126,7 @@ class PricesMixin:
                 fit = series.fit_line(pairs)
                 if fit and fit[2] >= series.FIT_MIN_R2:
                     a, b, _r2 = fit
-                    ahead = series.hourly(self._epex, base, hours, fill_last=False)
+                    ahead = series.hourly(self._epex, base, hours, fill_last=False, full=True)
                     out = series.published_prefix([cur] + [None if x is None else a * x + b for x in ahead[1:]])
                     how = "estimated"
         self._price_guess[eid] = [kind in ("dynamic", "unknown") and i > 0 for i in range(len(out))]
@@ -137,13 +138,15 @@ class PricesMixin:
         return out
 
     def _pv_forecast(self, start: float, hours: int) -> list[float] | None:
-        slots = []
+        slots: list = []
         for key in (CONF_PV_FORECAST, CONF_PV_FORECAST_TOMORROW):
             st = self._state(self.conf.get(key))
             if st is not None:
-                slots += series.find_slots(dict(st.attributes))
+                # the first sensor wins where both cover the same time: summing them counted that sun twice (R14)
+                slots += [s for s in series.find_slots(dict(st.attributes))
+                          if not any(min(s[1], k[1]) - max(s[0], k[0]) > 0 for k in slots)]
         if slots:
-            return series.energy_per_hour(sorted(slots), start, hours)
+            return series.energy_per_hour(sorted(slots), start, hours, rate_first=True)
         if self.conf.get(CONF_PV_POWER) and self.pv_k:
             base = start - start % 3600
             return [self.pv_k * (self._weather.get(int(base + i * 3600)) or (0, 0, 0))[1] for i in range(hours)]
@@ -202,26 +205,26 @@ class PricesMixin:
         surplus = value.solar_export_now(self._kw(c.get(CONF_GRID_POWER)), self._kw(c.get(CONF_BATTERY_POWER)),
                                          self._kw(c.get(CONF_PV_POWER)), c.get(CONF_GRID_SIGN, "import_positive") == "import_positive")
         soc = self._num(c.get(CONF_BATTERY_SOC))
+        # the local hour of each hour ahead, from its own time: over a change of daylight saving time "now + i" is wrong (R15)
+        base = int(now.timestamp() // 3600 * 3600)
+        lh = [self.local_hour(base + i * 3600) for i in range(hours + 1)]
         load = None
         if self.load_profile and len(self.load_profile) == 24:
-            h0 = dt_util.as_local(now).hour
-            load = [self.load_profile[(h0 + i) % 24] for i in range(hours)]
+            load = [self.load_profile[lh[i]] for i in range(hours)]
         bat = self.battery
         grid_charge = grid_charge_to = soc_usual = None
         if bat.charges_from_grid:               # learned: the battery is also charged from the grid, in these hours
-            h0 = dt_util.as_local(now).hour
-            grid_charge_to = [bat.top_soc.get(str((h0 + i) % 24), 100.0) if (h0 + i) % 24 in bat.grid_hours else None
+            grid_charge_to = [bat.top_soc.get(str(lh[i]), 100.0) if lh[i] in bat.grid_hours else None
                               for i in range(hours)]
             if (self._kw(c.get(CONF_BATTERY_POWER)) or 0.0) > 0.3:
                 grid_charge_to[0] = None        # discharging right now: not charging this hour after all
             if len(bat.soc_by_hour) == 24:      # its steering decides when it discharges: follow its usual charge
-                soc_usual = [bat.soc_by_hour[str((h0 + i + 1) % 24)] for i in range(hours)]
+                soc_usual = [bat.soc_by_hour[str(lh[i + 1])] for i in range(hours)]
             if c.get(CONF_BATTERY_USE) == "cheaper":       # the heat pump may count on its cheap charging hours
-                grid_charge = [(h0 + i) % 24 in bat.charge_hours for i in range(hours)]
+                grid_charge = [lh[i] in bat.charge_hours for i in range(hours)]
         holds = None
         if bat.hold_hours:                      # learned: hours in which its steering keeps the charge for later
-            h0 = dt_util.as_local(now).hour
-            holds = [(h0 + i) % 24 in bat.hold_hours for i in range(hours)]
+            holds = [lh[i] in bat.hold_hours for i in range(hours)]
             if (self._kw(c.get(CONF_BATTERY_POWER)) or 0.0) >= battery.SUPPLY_KW:
                 holds[0] = False                # delivering right now after all
         inp = value.EnergyInputs(import_price=imp, export_price=exp, pv_kwh=self._pv_forecast(now.timestamp(), hours), load_kwh=load,
