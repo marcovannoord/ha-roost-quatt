@@ -6,7 +6,7 @@ from unittest.mock import patch
 import pytest
 from homeassistant.util import dt as dt_util
 
-from custom_components.roost_quatt import savings
+from custom_components.roost import savings
 
 
 @pytest.fixture(autouse=True)
@@ -66,7 +66,7 @@ async def test_stored_heat_is_aged_over_the_downtime(hass, entry):
 
 def test_day_lists_follow_the_real_day_length():
     """R06: a 25-hour day of 25 prices is 25 hours of an hour each; tomorrow starts at the real local midnight."""
-    from custom_components.roost_quatt import series
+    from custom_components.roost import series
     mids = [1_792_965_600.0, 1_793_055_600.0, 1_793_142_000.0]          # 25 Oct (25 h), 26 Oct, 27 Oct (Amsterdam)
     s = series.slots_from_day_list(list(range(25)), mids[0], mids[1])
     assert s[0][1] - s[0][0] == 3600 and s[-1][1] == mids[1]
@@ -76,7 +76,7 @@ def test_day_lists_follow_the_real_day_length():
 
 def test_a_future_hour_needs_all_of_it_and_the_first_solar_hour_is_a_rate():
     """R05: only its first quarter published is not a price for the hour. R09: 2 kW with 15 minutes left is 2 kW."""
-    from custom_components.roost_quatt import series
+    from custom_components.roost import series
     t0 = 1_800_000_000 - 1_800_000_000 % 3600
     slots = [(t0, t0 + 3600, 0.30), (t0 + 3600, t0 + 4500, 0.10)]
     assert series.hourly(slots, t0 + 600, 2, fill_last=False) == [0.30, 0.10]
@@ -148,17 +148,3 @@ async def test_a_change_by_a_user_right_after_roost_still_pauses(hass, entry):
     hass.states.async_set(THERMOSTAT, "heat", {"temperature": 18.5, "current_temperature": 20.6}, context=Context(user_id="abc"))
     await hass.async_block_till_done()
     assert m.mem.pause_until and m.mem.pause_until > time.time()
-
-
-async def test_a_restart_within_the_hour_keeps_the_quatts_heating_seconds(hass, entry):
-    """For Quatt: the seconds of heating counted in the hour in progress are saved with it, so the hour is not lost."""
-    m = entry.runtime_data
-    t = dt_util.utcnow().timestamp()
-    hour = int(t // 3600 * 3600)
-    m._acc_hour = hour
-    m._live.hour, m._live.heating_s, m._live.boiler_s, m._live.seen_s = hour, 900.0, 0.0, 1500.0
-    saved = m._acc_state()
-    m._live.hour, m._live.heating_s, m._live.seen_s = None, 0.0, 0.0
-    m._restore_acc(saved, t + 60)
-    assert m._live.hour == hour and m._live.heating_s == 900.0 and m._live.seen_s == 1500.0
-    assert m._last_elec is None                       # a Quatt has no meter reading

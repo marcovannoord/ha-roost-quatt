@@ -6,11 +6,11 @@ import assert from "node:assert/strict";
 
 const elements = new Map();
 const registry = { get: (name) => elements.get(name), define: (name, value) => elements.set(name, value) };
-vm.runInNewContext(readFileSync(fileURLToPath(new URL("../custom_components/roost_quatt/frontend/roost-quatt-card.js", import.meta.url)), "utf8"), {
+vm.runInNewContext(readFileSync(fileURLToPath(new URL("../custom_components/roost/frontend/roost-card.js", import.meta.url)), "utf8"), {
   HTMLElement: class {}, window: { customElements: registry }, console: { info() {} },
   setInterval() {}, clearInterval() {}, Date, Intl,
 });
-const Card = elements.get("roost-quatt-card");
+const Card = elements.get("roost-card");
 
 function card(language = "nl") {
   const c = new Card();

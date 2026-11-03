@@ -1,0 +1,28 @@
+{
+  "domain": "roost",
+  "name": "Roost",
+  "after_dependencies": [
+    "weheat",
+    "quatt",
+    "weather"
+  ],
+  "codeowners": [
+    "@Akashironld",
+    "@marcovannoord"
+  ],
+  "config_flow": true,
+  "dependencies": [
+    "application_credentials",
+    "recorder",
+    "http",
+    "frontend",
+    "lovelace",
+    "websocket_api"
+  ],
+  "documentation": "https://github.com/Akashironld/ha-roost",
+  "integration_type": "service",
+  "iot_class": "calculated",
+  "issue_tracker": "https://github.com/Akashironld/ha-roost/issues",
+  "requirements": [],
+  "version": "0.8.2"
+}

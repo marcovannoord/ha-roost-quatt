@@ -1,5 +1,6 @@
-"""Fixtures: a Home Assistant with a recorder, a Quatt Duo (devices + sensors as the Quatt integration makes
-them), an OpenTherm thermostat, a price sensor, and Roost set up on them.
+"""Fixtures: a Home Assistant with a recorder, a Weheat heat pump (device + sensors as the Weheat integration makes
+them) or a Quatt Duo (devices + sensors as the Quatt integration makes them), an OpenTherm thermostat, a price sensor,
+and Roost set up on them.
 
 The dashboard card is served through Home Assistant's web server and frontend, which are not part of a test run:
 they are stood in for with mocks."""
@@ -16,9 +17,22 @@ from homeassistant.setup import async_setup_component
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import MockConfigEntry, async_mock_service
 
-DOMAIN = "roost_quatt"
+DOMAIN = "roost"
 THERMOSTAT = "climate.living_room"
 PRICE = "sensor.electricity_price"
+WEHEAT_SENSORS = {   # translation_key -> (state, unit, device_class)
+    "heat_pump_state": ("standby", None, "enum"),
+    "energy_output_heating": ("8000.0", "kWh", "energy"),
+    "electricity_used_heating": ("1800.0", "kWh", "energy"),
+    "energy_output_defrost": ("-100.0", "kWh", "energy"),
+    "electricity_used_defrost": ("4.0", "kWh", "energy"),
+    "electricity_used_dhw": ("1000.0", "kWh", "energy"),
+    "outside_temperature": ("6.0", "°C", "temperature"),
+    "power_input": ("10", "W", "power"),
+    "power_output": ("0", "W", "power"),
+    "thermostat_room_temperature": ("20.6", "°C", "temperature"),
+    "thermostat_water_setpoint": ("10", "°C", "temperature"),
+}
 QUATT_SENSORS = {   # (device, key) -> (state, unit, device_class), unique_id "<hub>:<device>:<key>"
     ("cic", "qc.supervisoryControlMode"): ("0", None, None),
     ("cic", "computedHeatPower"): ("0", "W", "power"),
@@ -55,14 +69,39 @@ def thermostat(hass: HomeAssistant, target: float = 20.5, room: float = 20.6) ->
     hass.states.async_set(THERMOSTAT, "heat", {"temperature": target, "current_temperature": room, "hvac_modes": ["heat", "off"]})
 
 
-@pytest.fixture
-async def quatt(hass: HomeAssistant) -> str:
-    """A Quatt Duo with its devices and sensors, as the Quatt integration creates them. Returns the CIC's device id."""
+def _web(hass: HomeAssistant) -> None:
     hass.http = MagicMock()
     hass.http.async_register_static_paths = AsyncMock()
     hass.config.components.update({"http", "frontend", "lovelace"})
     hass.data[DATA_EXTRA_MODULE_URL] = set()
     hass.data[DATA_EXTRA_JS_URL_ES5] = set()
+
+
+@pytest.fixture
+async def weheat(hass: HomeAssistant) -> str:
+    """A Weheat heat pump device with its sensors, as the Weheat integration creates them. Returns the device id."""
+    _web(hass)
+    wh = MockConfigEntry(domain="weheat", title="Weheat cloud", data={"token": {}})
+    wh.add_to_hass(hass)
+    dev = dr.async_get(hass).async_get_or_create(config_entry_id=wh.entry_id, identifiers={("weheat", "hp-1")},
+                                                 name="Blackbird P80 heat pump", model="Blackbird P80 heat pump")
+    reg = er.async_get(hass)
+    for key, (state, unit, dc) in WEHEAT_SENSORS.items():
+        ent = reg.async_get_or_create("sensor", "weheat", f"hp-1_{key}", config_entry=wh, device_id=dev.id,
+                                      translation_key=key, suggested_object_id=f"heat_pump_{key}")
+        attrs = {"device_class": dc}
+        if unit:
+            attrs["unit_of_measurement"] = unit
+        hass.states.async_set(ent.entity_id, state, attrs)
+    thermostat(hass)
+    prices(hass)
+    return dev.id
+
+
+@pytest.fixture
+async def quatt(hass: HomeAssistant) -> str:
+    """A Quatt Duo with its devices and sensors, as the Quatt integration creates them. Returns the CIC's device id."""
+    _web(hass)
     qe = MockConfigEntry(domain="quatt", title="Quatt", unique_id=HUB, data={"ip_address": "192.0.2.10"})
     qe.add_to_hass(hass)
     dev_reg, reg = dr.async_get(hass), er.async_get(hass)
@@ -81,10 +120,11 @@ async def quatt(hass: HomeAssistant) -> str:
     return devices["cic"].id
 
 
-async def setup_roost(hass: HomeAssistant, device_id: str, options: dict | None = None) -> MockConfigEntry:
+async def setup_roost(hass: HomeAssistant, device_id: str, options: dict | None = None,
+                      data: dict | None = None) -> MockConfigEntry:
     entry = MockConfigEntry(domain=DOMAIN, title="Roost", unique_id=device_id,
                             data={"heat_pump": device_id, "thermostat": THERMOSTAT, "import_price": PRICE,
-                                  "import_history": False, "weather_source": "open_meteo"},
+                                  "import_weheat_history": False, "weather_source": "open_meteo", **(data or {})},
                             options=options or {})
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
@@ -98,6 +138,12 @@ async def climate_calls(hass: HomeAssistant):
 
 
 @pytest.fixture
-async def entry(hass: HomeAssistant, quatt: str, climate_calls) -> MockConfigEntry:
+async def entry(hass: HomeAssistant, weheat: str, climate_calls) -> MockConfigEntry:
     assert await async_setup_component(hass, "websocket_api", {})
-    return await setup_roost(hass, quatt)
+    return await setup_roost(hass, weheat)
+
+
+@pytest.fixture
+async def quatt_entry(hass: HomeAssistant, quatt: str, climate_calls) -> MockConfigEntry:
+    assert await async_setup_component(hass, "websocket_api", {})
+    return await setup_roost(hass, quatt, data={"brand": "quatt"})

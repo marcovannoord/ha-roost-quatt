@@ -7,8 +7,8 @@ import pytest
 
 from homeassistant.util import dt as dt_util
 
-from custom_components.roost_quatt import planner
-from custom_components.roost_quatt.sensor import SavingYesterdaySensor
+from custom_components.roost import planner
+from custom_components.roost.sensor import SavingYesterdaySensor
 
 
 @pytest.fixture
@@ -31,7 +31,7 @@ async def test_hour_boundary_forces_plan_before_logging(entry):
         m.plan_at = _now.timestamp()
         m.plan_hours = [planner.HourIn(5, 3.5, 0, 0.7, 0.7)]
 
-    with patch("custom_components.roost_quatt.manager.dt_util.utcnow", return_value=now), \
+    with patch("custom_components.roost.manager.dt_util.utcnow", return_value=now), \
          patch.object(m, "_async_weather", AsyncMock()), \
          patch.object(m, "_async_plan", AsyncMock(side_effect=new_plan)) as plan, \
          patch.object(m, "_async_control", AsyncMock()):
@@ -47,9 +47,8 @@ async def test_cost_uses_current_hour_before_replanning(entry):
     m.plan_at = now.timestamp() - 120
     m.plan_hours = [planner.HourIn(5, 3.5, 0, 0.1, 0.1), planner.HourIn(5, 3.5, 0, 0.7, 0.7)]
     m._cost_day = dt_util.as_local(now).date().isoformat()
-    m.cost_today = 0.0
-    m._last_tick = now.timestamp() - 600             # a Quatt has no meter: 6 kW for 10 minutes is 1 kWh
-    with patch.object(type(m), "pump_state", return_value="heating"), patch.object(m, "_kw", return_value=6.0):
+    m._last_elec, m.cost_today = 10.0, 0.0
+    with patch.object(m, "_num", side_effect=[11.0, 0.0]):
         m._count_cost(now)
     assert abs(m.cost_today - 0.7) < 1e-9
 
@@ -81,7 +80,7 @@ async def test_bad_energy_replay_is_retained_but_not_published(entry):
                            "settings": vars(m.settings()), "extra_rooms": 0, "replay_version": planner.REPLAY_VERSION}
     bd = {"saving": -0.188, "kwh": 3.08, "short": 0, "b_short": 0,
           "hours": [{"t": 20.5} for _ in m.hour_log]}
-    with patch("custom_components.roost_quatt.hourlog.planner.replay_day", return_value=(0.9, 0.712, bd)):
+    with patch("custom_components.roost.hourlog.planner.replay_day", return_value=(0.9, 0.712, bd)):
         await m._async_close_day(day)
     assert day not in m.saving_days
     assert m.saving_detail[day]["model_saving"] == -0.188
@@ -109,7 +108,7 @@ async def test_day_close_respects_local_daylight_saving_time(entry, berlin_timez
                            "settings": vars(m.settings()), "extra_rooms": 0, "replay_version": planner.REPLAY_VERSION}
     bd = {"saving": -0.1, "kwh": length * 0.3, "short": 0, "b_short": 0,
           "hours": [{"t": 20.5} for _ in m.hour_log]}
-    with patch("custom_components.roost_quatt.hourlog.planner.replay_day", return_value=(1.0, 0.9, bd)):
+    with patch("custom_components.roost.hourlog.planner.replay_day", return_value=(1.0, 0.9, bd)):
         await m._async_close_day(day)
     assert m.day_stats[day]["quality"]["valid"]
     assert m.day_stats[day]["quality"]["expected_hours"] == length

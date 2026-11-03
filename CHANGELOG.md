@@ -1,34 +1,28 @@
 # Changelog
 
-## v0.2.2 — Roost 0.8.2 merged
+## Unreleased — Quatt heat pumps
 
-Roost v0.8.2 brought in: the limit above the room holds in every step of the planner (a hybrid no longer calls its gas boiler through it), and the report works in Safari on iPhone and iPad. Its notes are below.
+**For everyone with a Quatt** — Roost now plans a Quatt heat pump (single or Duo) as well as a Weheat. The setup first
+asks whose heat pump it is.
 
-## v0.2.1 — Roost 0.8.1 merged
+### New
+- **Weheat or Quatt** as the first step of the setup. An existing Roost is a Weheat one and stays as it is.
+- **Quatt**: the Quatt integration's entities (home-assistant-quatt, local CIC connection), found by their keys: the
+  CIC's state, heat power, power input, flow temperatures and the OpenTherm thermostat's values
+- **History from Home Assistant's statistics** for a Quatt: up to a year of hours from the long-term statistics of the
+  Quatt sensors, in seconds, without a login; the seconds of heating per hour estimated from the power and, from then
+  on, counted from the CIC's state (kept over restarts)
+- **Starting profiles** for one Quatt outdoor unit and for a Quatt Duo; with the Quatt remote API the maximum output
+  from the rating of the outdoor units
+- **Electricity per hour and day** for a Quatt from the power input while it heats (it has no energy meter), the
+  units' standby measured and left out
+- A Quatt whose boiler gives no heat (removed, or never there) is not taken for a hybrid
+- The repair notices, the readiness texts and the heating curve advice in Quatt's own words (no Weheat app to set it
+  in: the advice is for the thermostat's maximum water temperature)
 
-Roost v0.8.1 brought in: a restart within an hour keeps what was measured so far, heat stored in the floor is aged over the time Home Assistant was down, daylight saving time, partly published hours, solar not counted twice, a weather entity in its own units, a change by hand right after Roost's own. Its notes are below.
-
-- For Quatt: the seconds of heating Roost counts itself in the hour in progress are saved with the hour too, so a restart within the hour goes on counting instead of dropping that hour.
-- A Quatt has no energy meter: the meter reading 0.8.1 saves with the hour stays empty, the electricity in the hour so far is kept as Roost integrated it.
-
-## v0.2.0 — Roost 0.8.0 merged
-
-Roost v0.8.0 brought into Roost for Quatt: a plan that holds, the unit stopping as soon as the thermostat asks nothing, the response learned from the last week when the unit answers differently, weekly comfort periods, savings checked against the day, the renewed card. Its notes are below; what is Quatt-specific stays as in v0.1.0.
-
-## v0.1.0 — Roost for Quatt
-
-First version of the fork of Roost v0.7.7 for Quatt heat pumps.
-
-- Reads the Quatt integration (home-assistant-quatt) instead of Weheat: the CIC's state, heat power, power input, flow temperatures and the OpenTherm thermostat's values, found by their keys.
-- The heat pump's history comes from Home Assistant's long-term statistics of those sensors (no login, nothing leaves Home Assistant); seconds of heating per hour are estimated from them and counted live from the CIC's state from then on.
-- Starting profiles for one Quatt outdoor unit and for a Quatt Duo.
-- Electricity per hour and per day from the power input (a Quatt has no energy meter), while heating only: the units' standby (~10 W) is measured and left out, as a heat pump's own meter for heating does.
-- The maximum output comes from what Quatt rates the outdoor units at (ratedPower per unit, remote API; both units of a Duo, or the first one twice when the second's sensor is disabled), fitted against the outdoor temperature over the heating range. Without the remote API a deliberately low starting line that learning raises.
-- The seconds of heating Roost counts itself are kept in its store, saved every hour, so a restart does not lose them before the nightly save.
-- A CIC that asks for a boiler which gives no heat (removed, or never there) does not make Roost treat it as a hybrid.
-- Domain `roost_quatt`, card `custom:roost-quatt-card`, services `roost_quatt.*`.
-
-_Below: the history of Roost itself._
+### Changed
+- The import of the heat pump's history and its button and service are named after neither brand (*History import*);
+  the entities keep their ids
 
 ## v0.8.2 — the limit above the room always holds, the report on iPhone and iPad
 

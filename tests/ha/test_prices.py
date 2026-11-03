@@ -5,8 +5,8 @@ from unittest.mock import patch
 import pytest
 from homeassistant.util import dt as dt_util
 
-from custom_components.roost_quatt import value
-from custom_components.roost_quatt.sensor import SavingNext24hSensor, SetpointSensor
+from custom_components.roost import value
+from custom_components.roost.sensor import SavingNext24hSensor, SetpointSensor
 
 from .conftest import PRICE
 
@@ -51,7 +51,7 @@ async def test_horizon_is_clipped_before_battery_valuation(hass, entry):
     publish(hass, now, 10)
     m.conf.update(battery_soc="sensor.price_test_soc", battery_kwh=14., battery_kw=5.)
     hass.states.async_set("sensor.price_test_soc", "80")
-    with patch("custom_components.roost_quatt.prices.value.compute", wraps=value.compute) as compute:
+    with patch("custom_components.roost.prices.value.compute", wraps=value.compute) as compute:
         inp, ev = m._energy(now, 36)
     assert len(compute.call_args.args[0].import_price) == 10
     assert len(inp.import_price) == len(ev.value) == 10
@@ -107,7 +107,7 @@ async def test_plan_extends_when_prices_are_published_and_partial_saving_is_unav
 
 def _issue(hass, entry, kind):
     from homeassistant.helpers import issue_registry as ir
-    return ir.async_get(hass).async_get_issue("roost_quatt", f"{entry.entry_id}_price_no_forecast_{kind}_{PRICE}")
+    return ir.async_get(hass).async_get_issue("roost", f"{entry.entry_id}_price_no_forecast_{kind}_{PRICE}")
 
 
 async def test_a_sensor_without_forecast_or_history_plans_on_a_flat_price(hass, entry):

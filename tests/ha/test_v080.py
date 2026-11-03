@@ -7,8 +7,8 @@ import pytest
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.util import dt as dt_util
 
-from custom_components.roost_quatt import diagnostics, rooms, schedule, stick
-from custom_components.roost_quatt.sensor import SavingMonthSensor
+from custom_components.roost import diagnostics, rooms, schedule, stick
+from custom_components.roost.sensor import SavingMonthSensor
 
 from .conftest import THERMOSTAT, thermostat
 
@@ -21,7 +21,7 @@ def mutable_test_configuration(entry, monkeypatch):
 
 
 def issue(hass, entry, key):
-    return ir.async_get(hass).async_get_issue("roost_quatt", f"{entry.entry_id}_{key}")
+    return ir.async_get(hass).async_get_issue("roost", f"{entry.entry_id}_{key}")
 
 
 async def test_the_plan_is_held_until_a_reason(hass, entry):
@@ -141,60 +141,35 @@ async def test_a_house_below_its_minimum_gets_a_notice(hass, entry):
     assert issue(hass, entry, "house_cold") is None
 
 
-def _heating(hass, m, watts) -> None:
-    """The CIC heating with the units taking `watts` (a Quatt has no energy meter: Roost integrates the power)."""
-    hass.states.async_set(m.ent["state"], "2")
-    hass.states.async_set(m.ent["power_in"], str(watts) if watts is not None else "unavailable",
-                          {"device_class": "power", "unit_of_measurement": "W"})
-
-
 async def test_a_missing_meter_makes_no_phantom_use(hass, entry):
-    """R16 for a Quatt: the power reading unavailable for a while adds nothing, and its return adds only the time since
-    the last run (not the gap)."""
+    """R16: the defrost meter unavailable and back unchanged: nothing counted."""
     m = entry.runtime_data
     now = dt_util.utcnow()
-    t = now.timestamp()
-    _heating(hass, m, None)
-    m._last_tick = t - 120
-    before = m.kwh_today
+    defrost = m.ent["elec_defrost"]
     m._count_cost(now)
+    before = m.kwh_today
+    hass.states.async_set(defrost, "unavailable")
+    m._count_cost(now + timedelta(minutes=2))
+    hass.states.async_set(defrost, "4.0", {"device_class": "energy", "unit_of_measurement": "kWh"})
+    m._count_cost(now + timedelta(minutes=4))
     assert m.kwh_today == before
-    _heating(hass, m, 1200)
-    m._last_tick = t + 3600 - 120                     # an hour later, two minutes after the last run
-    m._count_cost(now + timedelta(hours=1))
-    assert m.kwh_today - before == pytest.approx(1.2 * 120 / 3600)
 
 
 async def test_energy_without_a_plan_is_priced_or_marked_unpriced(hass, entry):
     """R17: not free."""
     m = entry.runtime_data
     now = dt_util.utcnow()
-    t = now.timestamp()
-    m.plan, m.plan_hours, m.plan_at = None, [], None
-    _heating(hass, m, 3000)                           # 3 kW for 20 minutes: 1 kWh
-    m._tariff_now = 0.30
-    m._last_tick = t - 600                            # at most 10 minutes per run count: two runs of 10 minutes
+    elec = m.ent["elec"]
     m._count_cost(now)
-    m._last_tick = t
-    m._count_cost(now + timedelta(minutes=10))
+    m.plan, m.plan_hours, m.plan_at = None, [], None
+    m._tariff_now = 0.30
+    hass.states.async_set(elec, "1801.0", {"device_class": "energy", "unit_of_measurement": "kWh"})
+    m._count_cost(now + timedelta(minutes=2))
     assert m.cost_today == pytest.approx(0.30)
     m._tariff_now = None
-    for k in (2, 3):
-        m._last_tick = t + (k - 1) * 600
-        m._count_cost(now + timedelta(minutes=10 * k))
+    hass.states.async_set(elec, "1802.0", {"device_class": "energy", "unit_of_measurement": "kWh"})
+    m._count_cost(now + timedelta(minutes=4))
     assert m.cost_today == pytest.approx(0.30) and m.unpriced_kwh == pytest.approx(1.0)
-
-
-async def test_standby_is_not_heating_electricity(hass, entry):
-    """A Quatt standing still takes ~10 W: not counted as heating, as a heat pump's own meter for heating does."""
-    m = entry.runtime_data
-    now = dt_util.utcnow()
-    hass.states.async_set(m.ent["state"], "0")
-    hass.states.async_set(m.ent["power_in"], "12", {"device_class": "power", "unit_of_measurement": "W"})
-    m._last_tick = now.timestamp() - 120
-    before = m.kwh_today
-    m._count_cost(now)
-    assert m.kwh_today == before
 
 
 async def test_a_change_undone_within_the_hour_still_marks_the_day(hass, entry):
@@ -218,12 +193,12 @@ async def test_failed_learning_keeps_the_models_it_had(hass, entry):
     """R21."""
     m = entry.runtime_data
     house, pump, chk = m.house, m.pump, m.check
-    with patch("custom_components.roost_quatt.check.self_check", side_effect=RuntimeError("boom")), \
-         patch("custom_components.roost_quatt.learning.async_rows", return_value=([], {})), \
-         patch("custom_components.roost_quatt.model.stale", return_value=False), \
-         patch("custom_components.roost_quatt.model.learn") as learn, \
-         patch("custom_components.roost_quatt.heatpump.learn", side_effect=lambda rows, p: (p, "")), \
-         patch("custom_components.roost_quatt.response.learn", side_effect=lambda rows, h, p: (p, "")), \
+    with patch("custom_components.roost.check.self_check", side_effect=RuntimeError("boom")), \
+         patch("custom_components.roost.learning.async_rows", return_value=([], {})), \
+         patch("custom_components.roost.model.stale", return_value=False), \
+         patch("custom_components.roost.model.learn") as learn, \
+         patch("custom_components.roost.heatpump.learn", side_effect=lambda rows, p: (p, "")), \
+         patch("custom_components.roost.response.learn", side_effect=lambda rows, h, p: (p, "")), \
          patch.object(type(m), "_async_tick"):
         learn.return_value.model = type(house)(C=40.0)
         await m.async_learn()
@@ -278,18 +253,18 @@ async def test_the_card_saves_weekly_periods_without_a_reload(hass, entry):
     m = entry.runtime_data
     week = {"monday": [[420, 540], [1050, 1320]], "sunday": "08:30-23:00"}
     with patch.object(type(m), "_async_tick"):
-        await hass.services.async_call("roost_quatt", "set_settings", {"weekly_comfort": True, "comfort_schedule": week}, blocking=True)
+        await hass.services.async_call("roost", "set_settings", {"weekly_comfort": True, "comfort_schedule": week}, blocking=True)
     await hass.async_block_till_done()
     assert entry.runtime_data is m                                   # not reloaded
     assert entry.options[schedule.ENABLED] is True
     assert entry.options[schedule.WEEK]["monday"] == [[420, 540], [1050, 1320]] and entry.options[schedule.WEEK]["tuesday"] == []
     m.conf.update(entry.options)                                     # the test's fixed conf: as Home Assistant merges it
     with pytest.raises(ServiceValidationError):
-        await hass.services.async_call("roost_quatt", "set_settings", {"comfort_schedule": {"monday": [[420, 600], [540, 700]]}}, blocking=True)
+        await hass.services.async_call("roost", "set_settings", {"comfort_schedule": {"monday": [[420, 600], [540, 700]]}}, blocking=True)
     with pytest.raises(ServiceValidationError):
-        await hass.services.async_call("roost_quatt", "set_settings", {"day_from": 6}, blocking=True)
+        await hass.services.async_call("roost", "set_settings", {"day_from": 6}, blocking=True)
     with patch.object(type(m), "_async_tick"):
-        await hass.services.async_call("roost_quatt", "set_settings", {"weekly_comfort": False}, blocking=True)
+        await hass.services.async_call("roost", "set_settings", {"weekly_comfort": False}, blocking=True)
     assert entry.options[schedule.ENABLED] is False and entry.options[schedule.WEEK]["monday"] == [[420, 540], [1050, 1320]]
 
 
@@ -314,22 +289,22 @@ async def test_runs_of_the_unit_are_counted_per_day(hass, entry):
         assert s["today"]["minutes"] == round((30 + 10) / 2)
 
 
-async def test_an_install_from_v077_starts_and_drops_unchecked_savings(hass, quatt, climate_calls, hass_storage):
-    """Upgrading from v0.1.0 (Roost v0.7.7): its stored state has none of the new fields (frozen day contexts, the plan held, the
+async def test_an_install_from_v077_starts_and_drops_unchecked_savings(hass, weheat, climate_calls, hass_storage):
+    """Upgrading from v0.7.7: its stored state has none of the new fields (frozen day contexts, the plan held, the
     unit's runs, saving quality). Roost starts, steers, and no longer counts the old unchecked days in the month."""
     from homeassistant.setup import async_setup_component
     from pytest_homeassistant_custom_component.common import MockConfigEntry
-    from custom_components.roost_quatt.const import STORAGE_VERSION
+    from custom_components.roost.const import STORAGE_VERSION
     from .conftest import PRICE
     assert await async_setup_component(hass, "websocket_api", {})
     day = (dt_util.now() - timedelta(days=2)).date().isoformat()
-    hass_storage["roost_quatt.old077"] = {"version": STORAGE_VERSION, "key": "roost_quatt.old077", "data": {
+    hass_storage["roost.old077"] = {"version": STORAGE_VERSION, "key": "roost.old077", "data": {
         "mode": "active", "saving_days": {day: 0.42}, "day_stats": {day: {"saving": 0.42, "kwh": 3.1}},
         "saving_detail": {day: {"saving": 0.42}}, "replayed_with": 2, "hour_log": [], "plan_log": [],
         "control": {"last_write": None, "last_sp": 20.5}, "storage_e": 1.2, "today": {"day": day, "cost": 0.5, "kwh": 2.0}}}
-    entry = MockConfigEntry(domain="roost_quatt", entry_id="old077", title="Roost", unique_id=quatt,
-                            data={"heat_pump": quatt, "thermostat": THERMOSTAT, "import_price": PRICE,
-                                  "import_history": False, "weather_source": "open_meteo"})
+    entry = MockConfigEntry(domain="roost", entry_id="old077", title="Roost", unique_id=weheat,
+                            data={"heat_pump": weheat, "thermostat": THERMOSTAT, "import_price": PRICE,
+                                  "import_weheat_history": False, "weather_source": "open_meteo"})
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()

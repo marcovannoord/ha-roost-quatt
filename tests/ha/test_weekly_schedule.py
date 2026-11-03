@@ -7,7 +7,7 @@ import pytest
 from homeassistant.util import dt as dt_util
 from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.exceptions import ServiceValidationError
-from custom_components.roost_quatt import schedule, planner, value
+from custom_components.roost import schedule, planner, value
 from .test_config_flow import COMFORT
 
 
@@ -72,7 +72,7 @@ async def test_runtime_quarters_follow_local_weekday_and_current_control_minimum
         assert not m.is_day(dt_util.as_local(now))
         assert m.is_day(dt_util.as_local(now.replace(minute=30)))
         m.mode="shadow";m.plan_hours=hours;m.plan_at=now.timestamp()   # v0.8.0: the plan for this hour
-        with patch("custom_components.roost_quatt.manager.control.decide",wraps=__import__("custom_components.roost_quatt.control",fromlist=["decide"]).decide) as decide:
+        with patch("custom_components.roost.manager.control.decide",wraps=__import__("custom_components.roost.control",fromlist=["decide"]).decide) as decide:
             await m._async_control(now.timestamp())
             assert decide.call_args.args[4]==18.5
             await m._async_control(now.replace(minute=30).timestamp())

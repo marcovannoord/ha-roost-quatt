@@ -159,17 +159,23 @@ def test_an_outdated_too_high_maximum_is_reset():
     assert not heatpump.reset_old_pmax(heatpump.HeatPumpModel.for_profile("p80"), "p80")
 
 
-def test_every_role_the_code_reads_is_a_quatt_role():
-    """After merging Roost from upstream (written for Weheat): a heat pump role the code reads that the Quatt mapping
-    does not have would quietly be None. This fails instead, so the merge gets a Quatt key for it (or a decision)."""
+def test_every_role_the_code_reads_is_mapped_for_its_brand():
+    """A heat pump role the code reads that a brand's mapping does not have would quietly be None. The shared code
+    must find each role it reads for both brands (const.WEHEAT and quatt.QUATT); weheat_sync.py and quatt_sync.py
+    only for their own. This fails instead, so a new role gets a key for both (or a decision)."""
     import glob
     import re
-    src = os.path.join(os.path.dirname(__file__), "..", "custom_components", "roost_quatt", "*.py")
-    used = set()
+    src = os.path.join(os.path.dirname(__file__), "..", "custom_components", "roost", "*.py")
+    weheat, ours = set(load("const").WEHEAT), set(quatt.QUATT)
+    allowed = {"weheat_sync.py": weheat, "quatt_sync.py": ours}
+    seen = 0
     for path in glob.glob(src):
         text = open(path, encoding="utf-8").read()
-        used |= set(re.findall(r"\bent\.get\(\"([a-z0-9_]+)\"\)", text)) | set(re.findall(r"\bent\[\"([a-z0-9_]+)\"\]", text))
-    assert used and used <= set(quatt.QUATT), sorted(used - set(quatt.QUATT))
+        used = set(re.findall(r"\bent\.get\(\"([a-z0-9_]+)\"\)", text)) | set(re.findall(r"\bent\[\"([a-z0-9_]+)\"\]", text))
+        seen += len(used)
+        ok = allowed.get(os.path.basename(path), weheat & ours)
+        assert used <= ok, (os.path.basename(path), sorted(used - ok))
+    assert seen
 
 
 def test_rated_power_of_both_units():

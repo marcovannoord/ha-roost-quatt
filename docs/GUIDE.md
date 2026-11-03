@@ -102,7 +102,12 @@ Or by hand:
 Go to **Settings → Devices & services → + Add integration → Roost**. Roost fills in what it can find in your Home
 Assistant; you check it. Every setting can be changed later (section [10](#10-all-settings)).
 
-### Screen 1 — Roost
+### Screen 1 — Whose heat pump
+
+Pick **Weheat** or **Quatt**. Roost reads the heat pump through that maker's Home Assistant integration. A Quatt: see
+[Screen 1 for a Quatt](#screen-1-for-a-quatt) below.
+
+### Screen 1 — Roost (Weheat)
 
 | Field | What to fill in |
 |---|---|
@@ -113,6 +118,18 @@ Assistant; you check it. Every setting can be changed later (section [10](#10-al
 
 Click **Submit**: **Weheat's login page** opens. Log in with your Weheat account and allow it; you come back to the
 next screen. Nothing else to fill in — see [The Weheat login](#the-weheat-login).
+
+### Screen 1 for a Quatt
+
+| Field | What to fill in |
+|---|---|
+| Name | Leave *Roost* |
+| Quatt CIC | A device of the [Quatt integration](https://github.com/marcoboers/home-assistant-quatt) (local CIC connection), for instance the CIC. Roost needs its state, heat power and total power input (on by default) |
+| Thermostat | The OpenTherm thermostat connected to the CIC |
+| Import the heat pump's history now | Leave **on**. Roost reads up to a year of hours from Home Assistant's own long-term statistics of the Quatt sensors (heat, electricity, temperatures) in seconds. No login: nothing leaves Home Assistant |
+
+Click **Submit**: the next screen follows at once. What differs for a Quatt (no hot water, a Duo, the electricity
+without an energy meter) is in the [README](../README.md#quatt).
 
 ### Screen 2 — The house
 
@@ -569,11 +586,12 @@ automation:
 | Notice | Meaning | What to do |
 |---|---|---|
 | Ready to steer the heat pump | The self-check says Roost predicts well enough | Submit to switch to active, or ignore |
-| The heat pump does not follow the thermostat | It heats while the thermostat asks for nothing: it runs on its own heating curve | In the Weheat app, set the heat pump to follow the thermostat |
+| The heat pump does not follow the thermostat | It heats while the thermostat asks for nothing: it runs on its own heating curve | In the Weheat app, set the heat pump to follow the thermostat. A Quatt: check the thermostat is connected to the CIC over OpenTherm, and that nothing else (a boost) runs the heat pump |
 | The setpoint hardly moves the heat pump | Learned: changing the thermostat barely changes the heat pump's output | As above; or the thermostat does not pass the setpoint on |
 | The thermostat is also changed by a schedule | Changes Roost did not make come back at the same time every day | Turn off the thermostat's own schedule or the automation |
 | No room temperature | Neither the room sensor nor the thermostat reports one | Check the sensor's battery / connection |
 | Weheat heat pump not found | The Weheat sensors are not available | Check the Weheat integration |
+| Quatt heat pump not found | The CIC's state, heat power or power input is not available | Check the Quatt integration |
 | *Room* stays too cold | An extra room stayed below its minimum on several days | Check its radiator valve; raise *Setpoint at most this above the room* |
 | Comfort suggestion | A setting learned from your changes by hand | Submit to accept, or ignore |
 | The thermostat cannot be reached | The thermostat has been unavailable for 15 minutes or more while Roost steers; Roost leaves it alone meanwhile | Check the thermostat and its integration; the notice goes when it is back |
@@ -668,7 +686,7 @@ otherwise its saving is unavailable, with the reason (the calendar behind the sa
 heated now. Roost keeps the setting up instead of lowering it, so the house does not cool too far before dearer hours
 later; the heat pump waits until the room comes down to it.
 
-**Does it work with an air conditioner as well?** No, Roost is for a Weheat heat pump driven by a thermostat.
+**Does it work with an air conditioner as well?** No, Roost is for a Weheat or Quatt heat pump driven by a thermostat.
 
 **My thermostat is not in Home Assistant.** Roost needs to change its setpoint: add it to Home Assistant first (most
 OpenTherm and smart thermostats have an integration).
