@@ -10,7 +10,7 @@ from homeassistant.util import dt as dt_util
 from custom_components.roost import diagnostics, rooms, schedule, stick
 from custom_components.roost.sensor import SavingMonthSensor
 
-from .conftest import THERMOSTAT, thermostat
+from .conftest import THERMOSTAT, local_noon, thermostat
 
 
 @pytest.fixture(autouse=True)
@@ -144,7 +144,7 @@ async def test_a_house_below_its_minimum_gets_a_notice(hass, entry):
 async def test_a_missing_meter_makes_no_phantom_use(hass, entry):
     """R16: the defrost meter unavailable and back unchanged: nothing counted."""
     m = entry.runtime_data
-    now = dt_util.utcnow()
+    now = local_noon()
     defrost = m.ent["elec_defrost"]
     m._count_cost(now)
     before = m.kwh_today
@@ -158,7 +158,7 @@ async def test_a_missing_meter_makes_no_phantom_use(hass, entry):
 async def test_energy_without_a_plan_is_priced_or_marked_unpriced(hass, entry):
     """R17: not free."""
     m = entry.runtime_data
-    now = dt_util.utcnow()
+    now = local_noon()
     elec = m.ent["elec"]
     m._count_cost(now)
     m.plan, m.plan_hours, m.plan_at = None, [], None

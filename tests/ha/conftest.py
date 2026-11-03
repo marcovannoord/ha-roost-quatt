@@ -58,6 +58,12 @@ def auto_enable_custom_integrations(recorder_mock, enable_custom_integrations):
     return
 
 
+def local_noon():
+    """Today 12:00 local time (UTC): tests that count over minutes or hours from it stay on one day, whenever they run
+    (the test time zone is US/Pacific: 'now' late in the evening there crossed midnight)."""
+    return dt_util.as_utc(dt_util.now().replace(hour=12, minute=0, second=0, microsecond=0))
+
+
 def prices(hass: HomeAssistant, base: float = 0.30) -> None:
     start = dt_util.utcnow().replace(minute=0, second=0, microsecond=0)
     rates = [{"start": (start + timedelta(hours=i)).isoformat(), "end": (start + timedelta(hours=i + 1)).isoformat(),
