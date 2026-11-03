@@ -8,6 +8,7 @@ from homeassistant.util import dt as dt_util
 from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.exceptions import ServiceValidationError
 from custom_components.roost_quatt import schedule, planner, value
+from .conftest import local_noon
 from .test_config_flow import COMFORT
 
 
@@ -92,7 +93,7 @@ async def test_weekly_change_is_frozen_and_invalidates_mixed_day(hass,entry,monk
     m=entry.runtime_data;c=m.conf
     c.update({schedule.ENABLED:True,schedule.WEEK:schedule.normalise({"monday":"07:00-09:00"})})
     monkeypatch.setattr(type(m),"conf",property(lambda self:c))
-    now=dt_util.utcnow().replace(minute=0,second=0,microsecond=0)
+    now=local_noon()
     # Match this fixture's actual local weekday so the captured schedule is unambiguous.
     m.hour_log=[];m.day_contexts={}
     m._weather[int(now.timestamp())]=(6.,0.,3.5)

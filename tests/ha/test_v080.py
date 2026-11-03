@@ -10,7 +10,7 @@ from homeassistant.util import dt as dt_util
 from custom_components.roost_quatt import diagnostics, rooms, schedule, stick
 from custom_components.roost_quatt.sensor import SavingMonthSensor
 
-from .conftest import THERMOSTAT, thermostat
+from .conftest import THERMOSTAT, local_noon, thermostat
 
 
 @pytest.fixture(autouse=True)
@@ -152,7 +152,7 @@ async def test_a_missing_meter_makes_no_phantom_use(hass, entry):
     """R16 for a Quatt: the power reading unavailable for a while adds nothing, and its return adds only the time since
     the last run (not the gap)."""
     m = entry.runtime_data
-    now = dt_util.utcnow()
+    now = local_noon()
     t = now.timestamp()
     _heating(hass, m, None)
     m._last_tick = t - 120
@@ -168,7 +168,7 @@ async def test_a_missing_meter_makes_no_phantom_use(hass, entry):
 async def test_energy_without_a_plan_is_priced_or_marked_unpriced(hass, entry):
     """R17: not free."""
     m = entry.runtime_data
-    now = dt_util.utcnow()
+    now = local_noon()
     t = now.timestamp()
     m.plan, m.plan_hours, m.plan_at = None, [], None
     _heating(hass, m, 3000)                           # 3 kW for 20 minutes: 1 kWh
