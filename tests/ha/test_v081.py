@@ -8,6 +8,8 @@ from homeassistant.util import dt as dt_util
 
 from custom_components.roost_quatt import savings
 
+from .conftest import local_noon
+
 
 @pytest.fixture(autouse=True)
 def mutable_test_configuration(entry, monkeypatch):
@@ -19,7 +21,7 @@ def mutable_test_configuration(entry, monkeypatch):
 async def test_a_restart_within_the_hour_goes_on_counting(hass, entry):
     """R18: the hour in progress is saved; back in the same hour, Roost counts on from it and from the meter reading."""
     m = entry.runtime_data
-    t = dt_util.utcnow().timestamp()
+    t = local_noon().timestamp() + 600            # well within the hour: t + 60 too
     hour = int(t // 3600 * 3600)
     m._acc_hour, m._elec_acc, m._cost_acc, m._heat_acc, m._dhw_acc, m._obs_acc = hour, 0.6, 0.18, 2.0, 1200.0, 1500.0
     m._last_elec = 1801.4
@@ -153,7 +155,7 @@ async def test_a_change_by_a_user_right_after_roost_still_pauses(hass, entry):
 async def test_a_restart_within_the_hour_keeps_the_quatts_heating_seconds(hass, entry):
     """For Quatt: the seconds of heating counted in the hour in progress are saved with it, so the hour is not lost."""
     m = entry.runtime_data
-    t = dt_util.utcnow().timestamp()
+    t = local_noon().timestamp() + 600            # well within the hour: t + 60 too
     hour = int(t // 3600 * 3600)
     m._acc_hour = hour
     m._live.hour, m._live.heating_s, m._live.boiler_s, m._live.seen_s = hour, 900.0, 0.0, 1500.0

@@ -303,7 +303,7 @@ async def test_weekly_on_without_periods_starts_from_the_comfort_hours(hass, ent
 
 async def test_runs_of_the_unit_are_counted_per_day(hass, entry):
     m = entry.runtime_data
-    t = dt_util.utcnow().timestamp()
+    t = local_noon().timestamp()                    # all three runs today
     m.runs = []
     m._track_runs(t - 3600, True)
     m._track_runs(t - 1800, False)
