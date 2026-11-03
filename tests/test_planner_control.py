@@ -61,6 +61,29 @@ def test_a_setpoint_set_too_far_above_the_room_comes_down():
     assert p.first.sp <= 20.1 + s.max_above_room + planner.HOLD_MARGIN, [h.sp for h in p.hours[:4]]
 
 
+def test_never_far_above_the_room_with_a_slow_unit():
+    """Issue #9: a hybrid (Flint, at most 0.5 above the room) at 05:41 with the room at 20.3 and the unit off got 22.5
+    for an hour and its gas boiler came on. The search kept the limit, the step with the unit's delay (polish) only
+    counted 10 for it. The tester's models and the hours the plan saw (plan_log)."""
+    house = model.HouseModel(C=14.564, H=0.1492, g=3.6271, lag=1.1392, internal=-0.057, Hw=0.0056, source="learned",
+                             profile=[-0.03, -0.015, 0.015, -0.027, 0.043, 0.046, 0.344, 0.237, 0.182, 0.222, 0.073, 0.335,
+                                      0.709, -0.117, -0.63, -0.834, -0.582, 0.011, 0.295, -0.144, 0.107, 0.05, -0.188, -0.104])
+    hp = heatpump.HeatPumpModel.from_dict({**PUMP.as_dict(), "alpha": 3.103, "beta": 0.243, "gamma": -0.488, "pmax_a": 4.93,
+                                           "pmax_b": 0.12, "pmax_lo": 3.5, "pmax_hi": 7.43, "a": 1.3, "k": 1.5, "offset": -0.4,
+                                           "follow": 0.35, "stops": True, "th_diff": 0.0, "q_min": 2.02, "cyc": 1.0})
+    s = planner.Settings(comfort=20.5, day_min=20.0, night_min=20.0, store_max=22.5, sp_min=20.0, max_above_room=0.5)
+    t_out = [8.4, 8.2, 8.0, 8.0, 8.8, 10.2, 12.2, 13.7, 14.4, 14.7, 14.7, 14.4, 13.6, 12.5, 11.6, 11.1, 10.4, 10.7, 10.8]
+    rad = [0.0, 0.0, 0.0, 0.099, 0.212, 0.298, 0.352, 0.371, 0.343, 0.295, 0.212, 0.099] + [0.0] * 7
+    wind = [2.9, 2.6, 2.7, 2.8, 3.1, 2.7, 3.0, 3.6, 3.8, 4.2, 3.9, 3.7, 2.8, 2.6, 3.0, 3.4, 2.7, 2.8, 2.8]
+    grid = [0.3936, 0.436, 0.503, 0.4994, 0.4536, 0.3968, 0.364, 0.3544, 0.3588, 0.3698, 0.4126, 0.4932] + [0.47] * 7
+    own = grid[:12] + [0.537, 0.5606, 0.549, 0.5113, 0.4812, 0.4546, 0.423]
+    hs = [planner.HourIn(t_out=t_out[i], wind=wind[i], rad=rad[i], p_grid=grid[i], p_own=own[i], day=16 <= (5 + i) % 24 < 22,
+                         hour=(5 + i) % 24, extra_kw=-0.52 * 0.5 ** (i / 6)) for i in range(len(t_out))]
+    for e_now in (1.0, 2.0):
+        p = planner.plan(house, hp, s, hs, t_now=20.3, e_now=e_now, sp_now=20.0, w_now=0.0)
+        assert p.first.sp <= 20.3 + s.max_above_room + 1e-9, [h.sp for h in p.hours[:6]]
+
+
 
 def test_own_solar_is_used_for_storing():
     s = planner.Settings()

@@ -295,7 +295,10 @@ def test_slow_unit_plan_beats_a_steady_thermostat():
                                         p_grid=price, p_own=price, day=7 <= hr < 22, hour=hr))
         p = planner.plan(HOUSE, hp, s, hours, 20.6, 1.0, 20.0, w_now=2.0)
         if evening_price < 0.5:
-            assert p.saving > 0.0, (evening_price, p.saving)
+            # over the whole plan: with the limit above the room kept in polish (issue #9) it coasts through the
+            # evening and warms up again around hour 24, so the first 24 hours alone show a small loss
+            full = planner.plan(HOUSE, hp, s, hours, 20.6, 1.0, 20.0, report=36, w_now=2.0)
+            assert full.saving > 0.0, (evening_price, full.saving)
         else:
             # v0.8.0: the unit stops at once when the thermostat asks nothing, so coasting is no longer free heat;
             # the plan must still beat every steady setting on what the planner weighs (cost, comfort, heat left)

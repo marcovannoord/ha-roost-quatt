@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.2.2 — Roost 0.8.2 merged
+
+Roost v0.8.2 brought in: the limit above the room holds in every step of the planner (a hybrid no longer calls its gas boiler through it), and the report works in Safari on iPhone and iPad. Its notes are below.
+
 ## v0.2.1 — Roost 0.8.1 merged
 
 Roost v0.8.1 brought in: a restart within an hour keeps what was measured so far, heat stored in the floor is aged over the time Home Assistant was down, daylight saving time, partly published hours, solar not counted twice, a weather entity in its own units, a change by hand right after Roost's own. Its notes are below.
@@ -25,6 +29,17 @@ First version of the fork of Roost v0.7.7 for Quatt heat pumps.
 - Domain `roost_quatt`, card `custom:roost-quatt-card`, services `roost_quatt.*`.
 
 _Below: the history of Roost itself._
+
+## v0.8.2 — the limit above the room always holds, the report on iPhone and iPad
+
+**For everyone with a hybrid (a gas boiler next to the heat pump), and for everyone with a slowly following heat pump or extra rooms** — Roost could set the thermostat well above *Setpoint at most this above the room* for an hour, which on a hybrid calls the gas boiler. And the report now works in Safari on iPhone and iPad.
+
+### Fixes
+- **Setpoint far above the room** (#9): with the unit standing still and the room expected to drop below its minimum, a hybrid with a limit of 0.5 °C got 22.5 °C at a room of 20.3 °C for an hour, and its gas boiler came on. The step that refines the plan with the unit's delay (used for a slowly following unit and for extra rooms) counted going over the limit only as a cost, and a room heading below its minimum could outweigh it. The limit now holds there as it does in the rest of the planner. In closed-loop simulations this costs nothing (the cost is slightly lower) and no hour falls below a minimum more often; with a limit of 0.5 °C the room is a little more often just under the comfort temperature
+- **Report in Safari on iPhone and iPad** (#7): tapping *Report* did nothing. On a phone or tablet the report now opens the share sheet (save to Files, mail, AirDrop); a computer keeps the download, now as a file Safari also saves
+
+### After updating
+Update in HACS (or install the new `roost.zip`) and restart Home Assistant, then reload the dashboard (Ctrl+F5).
 
 ## v0.8.1 — restarts, daylight saving time and the smaller review points
 

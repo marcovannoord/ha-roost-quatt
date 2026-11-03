@@ -279,18 +279,28 @@ def polish(sim: Simulator, hours: list[HourIn], t_now: float, e_now: float, w_no
     H = len(hours)
     rooms = rooms or []
 
-    def run(seq: list[float], k0: int = 0, state=None):
-        """-> total, states (T, E, w, running total, previous setpoint, extra room temperatures) at the start of each hour"""
+    def allowed(sp: float, T: float, prev: float | None) -> bool:
+        # not too far above what the thermostat reads (an OpenTherm thermostat then asks for hot water, 37 °C instead
+        # of 32 at 1.3 °C above; a hybrid calls its gas boiler). Keeping the setpoint already set may go a little
+        # further, so a room a tenth cooler does not make it step down and up again. As in the search, the lowest setting always
+        return (sp <= T + hp.th_diff + s.max_above_room + (HOLD_MARGIN if sp == prev else 0.0) + 1e-9
+                or sp <= s.day_min or sp <= sps[0])
+
+    def run(seq: list[float], k0: int = 0, state=None, lower: bool = False):
+        """-> total, states (T, E, w, running total, previous setpoint, extra room temperatures) at the start of each
+        hour, the setpoints used. A setpoint too far above the room is a limit, not a cost (as a cost of 10 it lost to
+        a room expected below its minimum: 22.5 at a room of 20.3, issue #9): such a plan is out (an infinite total),
+        or with `lower` (a start) it is lowered to the highest setpoint allowed."""
         T, E, w, tot, prev, trs = state if state else (t_now, e_now, w_now, 0.0, sp_now, tuple(r["T"] for r in rooms))
-        states = []
+        states, used = [], []
         for k in range(k0, H):
             states.append((T, E, w, tot, prev, trs))
             sp = seq[k]
-            # not allowed: too far above what the thermostat reads (an OpenTherm thermostat then asks for hot water,
-            # 37 °C instead of 32 at 1.3 °C above). Keeping the setpoint already set may go a little further, so a room
-            # a tenth cooler does not make it step down and up again.
-            if sp > T + hp.th_diff + s.max_above_room + (HOLD_MARGIN if sp == prev else 0.0) + 1e-9 and sp > s.day_min and sp > sps[0]:
-                tot += 10.0
+            if not allowed(sp, T, prev):
+                if not lower:
+                    return float("inf"), states, used
+                sp = max((v for v in sps if v < sp and allowed(v, T, prev)), default=sps[0])
+            used.append(sp)
             T1, E, c, _e, q, pen = sim.hour(T, E, sp, hours[k], w)
             w = sim.w_end
             if rooms:
@@ -299,12 +309,12 @@ def polish(sim: Simulator, hours: list[HourIn], t_now: float, e_now: float, w_no
             T = T1
             tot += c + pen + (s.switch_cost if prev is not None and sp != prev else 0.0)
             prev = sp
-        return tot + end(T, E), states
+        return tot + end(T, E), states, used
 
     best, best_states = None, None
     for st in starts:
         st = list(st[:H]) + [st[-1]] * (H - len(st))
-        v, states = run(st)
+        v, states, st = run(st, lower=True)
         if best is None or v < best[0]:
             best, best_states = (v, st), states
     val, seq = best
@@ -319,10 +329,9 @@ def polish(sim: Simulator, hours: list[HourIn], t_now: float, e_now: float, w_no
                     if all(x == v for x in seq[k:k + L]):
                         continue
                     cand = seq[:k] + [v] * L + seq[k + L:]
-                    tot, _ = run(cand, k, states[k])
+                    tot, tail, _ = run(cand, k, states[k])
                     if tot < val - 1e-6:
                         val, seq = tot, cand
-                        _, tail = run(seq, k, states[k])
                         states = states[:k] + tail
                         improved = True
         if not improved:

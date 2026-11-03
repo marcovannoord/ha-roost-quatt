@@ -282,7 +282,7 @@ place, so the card does not grow. Choose **24 h**, **48 h** or **7 d**:
 - **Log** (folded; click to open): every change with its reason, and what happened an hour later against what was
   expected (✓, or *deviation*).
 - **Report**: a page with the period's numbers, the graph, the log and the days, to keep or share (made in your
-  browser, nothing is sent anywhere). It also shows **where the saving comes from**: per hour for yesterday and for
+  browser, nothing is sent anywhere; on a phone or tablet it opens the share sheet, to save it to Files or send it). It also shows **where the saving comes from**: per hour for yesterday and for
   the next 24 hours, Roost beside the steady thermostat it is compared with (setting, room, kWh, cost, saved), what
   the state at the end of the period still costs for each (a colder house is heat bought back later, a warmer one
   heat already bought), and every **plan change** of the last two days: the setting for that hour and the expected

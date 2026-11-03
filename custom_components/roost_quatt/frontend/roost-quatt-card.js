@@ -1,6 +1,6 @@
 /* Roost card - served by the roost integration. */
 (() => {   // own scope: safe if the file is loaded twice as a classic script (legacy frontend + a manual resource)
-const CARD_VERSION = "0.8.1";
+const CARD_VERSION = "0.8.2";
 
 // Plain ES2017 on purpose (no ?. / ??), ASCII only (\u escapes): wall tablets often run an older browser.
 const nn = (a, b) => (a === null || a === undefined ? b : a);
@@ -1387,11 +1387,28 @@ class RoostCard extends HTMLElement {
   // A page to keep or share: the period's numbers, the graph, the log and the days (built here, nothing is sent)
   _report() {
     const html = this._reportHtml();
+    const name = `roost-${new Date().toISOString().slice(0, 10)}.html`;
+    // a phone or tablet: the share sheet (save to Files, mail, AirDrop). Safari on iOS ignored the download link
+    // (issue #7); a computer keeps the download
+    const touch = window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
+    if (touch && navigator.canShare && navigator.share && typeof File === "function") {
+      const file = new File([html], name, { type: "text/html" });
+      if (navigator.canShare({ files: [file] })) {
+        navigator.share({ files: [file], title: name }).catch((e) => { if (!e || e.name !== "AbortError") this._download(html, name); });
+        return;
+      }
+    }
+    this._download(html, name);
+  }
+
+  _download(html, name) {
     const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob([html], { type: "text/html" }));
-    a.download = `roost-${new Date().toISOString().slice(0, 10)}.html`;
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+    // as a file, not a page: Safari would rather show a page than save it. Removed later: removing the link at once
+    // can cancel a download Safari has not started yet
+    a.href = URL.createObjectURL(new Blob([html], { type: "application/octet-stream" }));
+    a.download = name;
+    document.body.appendChild(a); a.click();
+    setTimeout(() => { a.remove(); URL.revokeObjectURL(a.href); }, 10000);
   }
 
   _reportHtml() {
