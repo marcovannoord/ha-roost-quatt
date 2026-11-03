@@ -15,7 +15,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.roost.diagnostics import async_get_config_entry_diagnostics
 from custom_components.roost.manager import QuattManager
 
-from .conftest import PRICE, THERMOSTAT
+from .conftest import PRICE, THERMOSTAT, local_noon
 from .test_config_flow import COMFORT, start
 
 DOMAIN = "roost"
@@ -165,7 +165,7 @@ async def test_the_seconds_of_heating_are_counted_and_kept(hass, quatt_entry):
 
 async def test_a_restart_within_the_hour_keeps_the_heating_seconds(hass, quatt_entry):
     m = quatt_entry.runtime_data
-    t = dt_util.utcnow().timestamp()
+    t = local_noon().timestamp() + 600            # well within the hour: t + 60 too
     hour = int(t // 3600 * 3600)
     m._acc_hour = hour
     m._live.hour, m._live.heating_s, m._live.boiler_s, m._live.seen_s = hour, 900.0, 0.0, 1500.0
